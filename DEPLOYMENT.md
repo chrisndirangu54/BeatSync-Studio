@@ -145,3 +145,98 @@ The current web split is suitable for development and staging, but production st
 - worker retry/recovery,
 - secure provider secret storage,
 - downloadable output URLs instead of local filesystem paths.
+
+
+## Firebase Authentication
+
+BeatSync now uses Firebase Authentication in the React frontend and Firebase Admin on the FastAPI backend.
+
+### 1. Enable providers
+
+In Firebase Console → Authentication → Sign-in method, enable:
+
+- Google
+- Email/Password
+
+Google sign-in is the easiest way to activate the bootstrap admin because Google-authenticated email addresses are normally verified.
+
+### 2. Configure the Next.js app
+
+Copy the Firebase Web App configuration into Vercel:
+
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
+
+### 3. Configure FastAPI / Cloud Run
+
+Set:
+
+```bash
+FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID
+BEATSYNC_BOOTSTRAP_ADMIN_EMAIL=chrisndirangu54@gmail.com
+```
+
+On Cloud Run, prefer Application Default Credentials through the service account attached to the Cloud Run service. Grant that service account the Firebase/Auth permissions required by Firebase Admin.
+
+For local development only, either set `GOOGLE_APPLICATION_CREDENTIALS` to a service account file outside the repository, or store the JSON securely in:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT_JSON=
+```
+
+Never commit service-account JSON.
+
+### Bootstrap platform admin
+
+The backend has a protected bootstrap rule for:
+
+```text
+chrisndirangu54@gmail.com
+```
+
+When that exact **verified** Firebase identity first calls the API, the backend assigns trusted custom claims:
+
+```json
+{
+  "admin": true,
+  "role": "admin",
+  "plan": "studio"
+}
+```
+
+plus the platform admin permission set.
+
+This is server-side. The frontend does not grant admin rights based on email.
+
+### Admin capabilities
+
+The admin console is available at:
+
+```text
+/admin
+```
+
+Current admin capabilities include:
+
+- list/read Firebase users,
+- promote/demote administrators,
+- assign Free / Pro / Creator / Studio plans,
+- enable or disable accounts,
+- revoke other users' refresh sessions,
+- delete non-bootstrap user accounts through the API,
+- view render jobs across users,
+- remove completed/failed in-memory render metadata,
+- see whether external providers are configured without exposing secret values,
+- retain protected Studio/admin access for the bootstrap owner account.
+
+### Trusted subscription enforcement
+
+The browser can display plan choices, but non-admin render authorization does **not** trust the submitted plan name.
+
+The FastAPI backend uses the Firebase `plan` custom claim as the authoritative entitlement. Admins can change that claim through the admin console/API. Stripe webhooks should eventually update the same trusted claim or the persistent entitlement record after successful subscription changes.
