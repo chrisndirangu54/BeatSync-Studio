@@ -7,6 +7,7 @@ import numpy as np
 
 from .intelligence import IntelligentBeatSync
 from .scene_understanding import SceneUnderstanding, music_scene_score
+from .narrative import NarrativePlanner, narrative_scene_score
 
 
 @dataclass
@@ -22,6 +23,7 @@ class DirectorConfig:
     beat_group_high_energy: int = 2
     semantic_matching: bool = True
     scene_samples: int = 6
+    narrative_planning: bool = True
 
 
 class _ClipCursor:
@@ -87,6 +89,7 @@ class MultiClipDirector:
         self.config = config or DirectorConfig()
         self.sync = IntelligentBeatSync(audio_path, intelligence_level)
         self.scene_profiles = []
+        self.narrative_plan = NarrativePlanner(audio_path, intelligence_level).plan() if self.config.narrative_planning else None
         if self.config.semantic_matching:
             analyzer = SceneUnderstanding(use_clip=True)
             self.scene_profiles = [analyzer.analyze(p, samples=self.config.scene_samples) for p in clip_paths]
@@ -156,10 +159,13 @@ class MultiClipDirector:
                 if cut:
                     if len(cursors) > 1:
                         if self.scene_profiles and len(self.scene_profiles) == len(cursors):
-                            scored = [
-                                (music_scene_score(profile, state, current, i), i)
-                                for i, profile in enumerate(self.scene_profiles)
-                            ]
+                            narrative_section = self.narrative_plan.section_at(t) if self.narrative_plan else None
+                            scored = []
+                            for i, profile in enumerate(self.scene_profiles):
+                                score = music_scene_score(profile, state, current, i)
+                                if narrative_section is not None:
+                                    score += 0.9 * narrative_scene_score(profile, narrative_section)
+                                scored.append((score, i))
                             current = max(scored, key=lambda x: x[0])[1]
                         else:
                             next_index = (current + 1 + state.section) % len(cursors)
