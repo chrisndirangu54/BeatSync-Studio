@@ -1,0 +1,6 @@
+numpy>=1.26
+opencv-python-headless>=4.10
+librosa>=0.10.2
+soundfile>=0.12
+requests>=2.32
+pytest>=8.0
