@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      CORS_ORIGINS: http://localhost:3000
+      RENDER_EXECUTION_MODE: local-thread
+      BEATSYNC_OUTPUT_DIR: /tmp/beatsync-outputs
+    ports:
+      - "8000:8080"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
