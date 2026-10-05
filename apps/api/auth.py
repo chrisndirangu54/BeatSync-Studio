@@ -33,6 +33,7 @@ class Principal:
     email_verified: bool
     role: str
     admin: bool
+    plan: str
     permissions: list[str]
     claims: dict
 
@@ -44,7 +45,10 @@ def _init_firebase():
     if service_account_json:
         import json
         info = json.loads(service_account_json)
-        firebase_admin.initialize_app(credentials.Certificate(info), {"projectId": project_id or info.get("project_id")})
+        firebase_admin.initialize_app(
+            credentials.Certificate(info),
+            {"projectId": project_id or info.get("project_id")},
+        )
     else:
         firebase_admin.initialize_app(options={"projectId": project_id} if project_id else None)
 
@@ -60,9 +64,17 @@ def _principal_from_claims(claims: dict) -> Principal:
         email_verified=bool(claims.get("email_verified", False)),
         role=role,
         admin=admin,
+        plan=str(claims.get("plan") or ("studio" if admin else "free")),
         permissions=permissions,
         claims=claims,
     )
+
+def _merge_custom_claims(uid: str, updates: dict) -> dict:
+    user = auth.get_user(uid)
+    claims = dict(user.custom_claims or {})
+    claims.update(updates)
+    auth.set_custom_user_claims(uid, claims)
+    return claims
 
 def _maybe_bootstrap_admin(claims: dict):
     email = str(claims.get("email") or "").lower()
@@ -73,18 +85,15 @@ def _maybe_bootstrap_admin(claims: dict):
         and not bool(claims.get("admin", False))
     ):
         uid = str(claims.get("uid") or claims.get("sub"))
-        auth.set_custom_user_claims(
-            uid,
-            {
-                "admin": True,
-                "role": "admin",
-                "permissions": ADMIN_PERMISSIONS,
-            },
-        )
-        # Current token still has old claims; return elevated principal for this
-        # verified request and the client can refresh its token afterwards.
+        updates = {
+            "admin": True,
+            "role": "admin",
+            "plan": "studio",
+            "permissions": ADMIN_PERMISSIONS,
+        }
+        _merge_custom_claims(uid, updates)
         claims = dict(claims)
-        claims.update(admin=True, role="admin", permissions=ADMIN_PERMISSIONS)
+        claims.update(updates)
     return claims
 
 def require_user(authorization: str = Header(default="")) -> Principal:
@@ -112,11 +121,25 @@ def require_permission(permission: str):
         raise HTTPException(403, f"Missing permission: {permission}")
     return dependency
 
-def set_user_role(uid: str, role: str, permissions: Iterable[str] | None = None, admin: bool = False):
-    claims = {
-        "admin": bool(admin),
-        "role": role,
-        "permissions": list(permissions or (ADMIN_PERMISSIONS if admin else [])),
-    }
-    auth.set_custom_user_claims(uid, claims)
-    return claims
+def set_user_access(
+    uid: str,
+    *,
+    role: str | None = None,
+    plan: str | None = None,
+    permissions: Iterable[str] | None = None,
+    admin: bool | None = None,
+):
+    updates = {}
+    if role is not None:
+        updates["role"] = role
+    if plan is not None:
+        updates["plan"] = plan
+    if admin is not None:
+        updates["admin"] = bool(admin)
+        if admin:
+            updates.setdefault("role", "admin")
+            updates.setdefault("plan", "studio")
+            updates.setdefault("permissions", ADMIN_PERMISSIONS)
+    if permissions is not None:
+        updates["permissions"] = list(permissions)
+    return _merge_custom_claims(uid, updates)
