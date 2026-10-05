@@ -202,3 +202,39 @@ def download_audio(url: str, destination: str, timeout: int = 180) -> str:
                 if chunk:
                     handle.write(chunk)
     return destination
+
+
+def compose_suno_edit_instruction(
+    *,
+    base_instruction: str = "",
+    add_instruments=None,
+    remove_instruments=None,
+    genre: str = "",
+    tempo_bpm: float | None = None,
+    pitch_semitones: float | None = None,
+    vocal_gender: str = "",
+    preserve_melody: bool = True,
+    preserve_lyrics: bool = True,
+) -> str:
+    """Translate structured UI controls into a precise natural-language v6 edit request."""
+    parts = []
+    if base_instruction.strip():
+        parts.append(base_instruction.strip())
+    if add_instruments:
+        parts.append("Add or emphasize these instruments: " + ", ".join(add_instruments) + ".")
+    if remove_instruments:
+        parts.append("Remove or strongly reduce these instruments: " + ", ".join(remove_instruments) + ".")
+    if genre.strip():
+        parts.append(f"Change the production style/genre toward {genre.strip()}.")
+    if tempo_bpm:
+        parts.append(f"Set the musical tempo close to {float(tempo_bpm):.1f} BPM while keeping timing musical.")
+    if pitch_semitones is not None and abs(float(pitch_semitones)) > .01:
+        direction = "up" if pitch_semitones > 0 else "down"
+        parts.append(f"Transpose the song {direction} by about {abs(float(pitch_semitones)):.1f} semitones.")
+    if vocal_gender in {"male","female"}:
+        parts.append(f"Use a {vocal_gender} lead vocal character while preserving the musical phrasing.")
+    if preserve_melody:
+        parts.append("Preserve the core melody unless a requested change requires otherwise.")
+    if preserve_lyrics:
+        parts.append("Preserve the existing lyrics unless explicitly requested otherwise.")
+    return " ".join(parts).strip()
