@@ -170,8 +170,8 @@ elif music_mode == "Generate with Suno":
             except Exception as exc:
                 st.exception(exc)
 
-    if st.session_state.get("suno_audio_path"):
-        st.audio(st.session_state["suno_audio_path"])
+    if st.session_state.get("suno_generated_audio_path"):
+        st.audio(st.session_state["suno_generated_audio_path"])
 
 else:
     allowed = "suno_editing" in plan.features
@@ -242,8 +242,8 @@ else:
             except Exception as exc:
                 st.exception(exc)
 
-    if st.session_state.get("suno_audio_path"):
-        st.audio(st.session_state["suno_audio_path"])
+    if st.session_state.get("suno_edited_audio_path"):
+        st.audio(st.session_state["suno_edited_audio_path"])
 
 st.subheader("3. Effect Rack")
 st.caption(
