@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .intelligence import IntelligentBeatSync
+from .scene_understanding import SceneUnderstanding, music_scene_score
 
 
 @dataclass
@@ -19,6 +20,8 @@ class DirectorConfig:
     cut_on_drops: bool = True
     beat_group_low_energy: int = 8
     beat_group_high_energy: int = 2
+    semantic_matching: bool = True
+    scene_samples: int = 6
 
 
 class _ClipCursor:
@@ -83,6 +86,10 @@ class MultiClipDirector:
         self.output_path = output_path
         self.config = config or DirectorConfig()
         self.sync = IntelligentBeatSync(audio_path, intelligence_level)
+        self.scene_profiles = []
+        if self.config.semantic_matching:
+            analyzer = SceneUnderstanding(use_clip=True)
+            self.scene_profiles = [analyzer.analyze(p, samples=self.config.scene_samples) for p in clip_paths]
 
     def _is_near(self, t: float, events: np.ndarray, tolerance: float = 0.045) -> bool:
         if len(events) == 0:
@@ -148,10 +155,17 @@ class MultiClipDirector:
 
                 if cut:
                     if len(cursors) > 1:
-                        next_index = (current + 1 + state.section) % len(cursors)
-                        if next_index == current:
-                            next_index = (current + 1) % len(cursors)
-                        current = next_index
+                        if self.scene_profiles and len(self.scene_profiles) == len(cursors):
+                            scored = [
+                                (music_scene_score(profile, state, current, i), i)
+                                for i, profile in enumerate(self.scene_profiles)
+                            ]
+                            current = max(scored, key=lambda x: x[0])[1]
+                        else:
+                            next_index = (current + 1 + state.section) % len(cursors)
+                            if next_index == current:
+                                next_index = (current + 1) % len(cursors)
+                            current = next_index
                     last_cut_t = t
 
                 last_section = state.section
