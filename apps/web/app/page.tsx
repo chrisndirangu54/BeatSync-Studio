@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE, getJSON, postForm } from "@/lib/api";
+import UserMenu from "@/components/UserMenu";
 
 type Effect = { key:string; name:string; category:string; description:string; tier:string; default_intensity:number; signal:string; };
 type Plan = { key:string; name:string; monthly_usd:number; export_height:number; watermark:boolean; max_effects:number; intelligent_sync_level:number; features:string[]; };
