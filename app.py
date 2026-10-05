@@ -164,8 +164,8 @@ elif music_mode == "Generate with Suno":
                     td = tempfile.mkdtemp(prefix="beatsync_suno_")
                     generated_path = os.path.join(td, "suno_generated_audio.mp3")
                     download_audio(result.audio_url, generated_path)
-                    st.session_state["suno_audio_path"] = generated_path
-                    st.session_state["suno_audio_url"] = result.audio_url
+                    st.session_state["suno_generated_audio_path"] = generated_path
+                    st.session_state["suno_generated_audio_url"] = result.audio_url
                     st.success("Suno soundtrack is ready for Intelligent Beat Sync.")
             except Exception as exc:
                 st.exception(exc)
@@ -236,8 +236,8 @@ else:
                     td = tempfile.mkdtemp(prefix="beatsync_suno_edit_")
                     edited_path = os.path.join(td, "suno_edited_audio.mp3")
                     download_audio(result.audio_url, edited_path)
-                    st.session_state["suno_audio_path"] = edited_path
-                    st.session_state["suno_audio_url"] = result.audio_url
+                    st.session_state["suno_edited_audio_path"] = edited_path
+                    st.session_state["suno_edited_audio_url"] = result.audio_url
                     st.success("Edited soundtrack is ready.")
             except Exception as exc:
                 st.exception(exc)
@@ -345,9 +345,14 @@ if render:
         with open(audio_path, "wb") as handle:
             handle.write(uploaded_audio.getbuffer())
     else:
-        audio_path = st.session_state.get("suno_audio_path")
+        session_key = (
+            "suno_generated_audio_path"
+            if music_mode == "Generate with Suno"
+            else "suno_edited_audio_path"
+        )
+        audio_path = st.session_state.get(session_key)
         if not audio_path or not os.path.exists(audio_path):
-            st.error("Generate or edit a Suno soundtrack first.")
+            st.error("Generate or edit the selected Suno soundtrack first.")
             st.stop()
 
     bar = st.progress(0.0, "Preparing project…")
