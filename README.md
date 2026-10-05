@@ -370,3 +370,62 @@ musical compatibility
 This means a clip is not selected merely because it has movement; it must also fit what the **story is supposed to be doing at that point in the song**.
 
 If available footage cannot satisfy a section, the UI exposes that section's Seedance prompt so a missing hero shot can be generated and added back into the project.
+
+
+## React web application
+
+BeatSync Studio now includes a production-oriented React frontend and FastAPI backend split:
+
+```text
+apps/
+├── web/   # Next.js / React / TypeScript
+└── api/   # FastAPI control plane
+```
+
+The React frontend provides:
+
+- project/subscription selection,
+- multi-video upload,
+- soundtrack upload,
+- narrative-plan visualization,
+- effect rack selection and intensity controls,
+- render job creation.
+
+The FastAPI service exposes:
+
+```text
+GET  /health
+GET  /v1/plans
+GET  /v1/effects
+POST /v1/narrative/plan
+POST /v1/renders
+GET  /v1/renders/{job_id}
+```
+
+For local development:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+The recommended first hosted architecture is:
+
+```text
+Vercel / Next.js
+        ↓
+Google Cloud Run / FastAPI
+        ↓
+object storage + durable render queue
+        ↓
+Cloud Run Jobs / GPU render workers
+```
+
+See `DEPLOYMENT.md` for setup and environment variables.
+
+The current API's render thread is intentionally a **development-only** launcher. Long production renders should be executed by durable worker jobs rather than inside a Cloud Run service instance.
