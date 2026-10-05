@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__
+*.pyc
+.venv
+venv
+apps/web/node_modules
+apps/web/.next
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.mp3
