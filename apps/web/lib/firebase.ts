@@ -4,6 +4,7 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
   signOut,
   User
@@ -28,6 +29,10 @@ export async function signInWithGoogle() {
 
 export async function signInWithEmail(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function createAccount(email: string, password: string) {
+  return createUserWithEmailAndPassword(auth, email, password);
 }
 
 export async function logout() {
