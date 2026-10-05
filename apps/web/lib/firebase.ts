@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithPopup,
   signOut,
   User
@@ -32,7 +33,9 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function createAccount(email: string, password: string) {
-  return createUserWithEmailAndPassword(auth, email, password);
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  await sendEmailVerification(credential.user);
+  return credential;
 }
 
 export async function logout() {
