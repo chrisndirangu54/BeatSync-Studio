@@ -322,3 +322,51 @@ These are placed at strong drop peaks and structural song boundaries detected fr
 | Studio | All features plus higher quotas, batch/team/priority architecture |
 
 Generated media and catalog/API usage should be metered separately from render minutes because the upstream providers have their own variable costs.
+
+
+## Automatic narrative planning
+
+BeatSync now plans the **whole music video before it edits individual frames**.
+
+`beatstudio/narrative.py` converts song sections into a structured `NarrativePlan`. Each section receives:
+
+- editorial role such as Intro, Verse, Pre-Chorus, Chorus, Bridge, Final Drop or Finale,
+- narrative intent,
+- preferred and avoided visual tags,
+- desired shot scale,
+- camera/motion language,
+- emotional tone,
+- pacing,
+- recommended effect direction,
+- a ready-to-use Seedance hero-shot prompt.
+
+The default narrative arc is:
+
+```text
+establish → connect → build → release → contrast → climax → resolve
+```
+
+A typical automatically generated plan can resemble:
+
+```text
+Intro      → atmospheric landscape / wide establishing image
+Verse      → performer close-up / medium storytelling coverage
+Pre-Chorus → moving medium shots / increasing camera energy
+Chorus     → dancing + wide performance / strong visual motif
+Bridge     → emotional close-up / longer reflective takes
+Final Drop → generated hero sequence / maximum controlled energy
+Finale     → iconic resolving image
+```
+
+Auto Director combines three scores when choosing a clip:
+
+```text
+musical compatibility
++ scene semantic compatibility
++ narrative-section compatibility
+= final shot score
+```
+
+This means a clip is not selected merely because it has movement; it must also fit what the **story is supposed to be doing at that point in the song**.
+
+If available footage cannot satisfy a section, the UI exposes that section's Seedance prompt so a missing hero shot can be generated and added back into the project.
