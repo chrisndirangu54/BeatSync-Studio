@@ -8,6 +8,7 @@ from beatstudio.director import MultiClipDirector, DirectorConfig
 from beatstudio.effects import SPECS, TIER_RANK
 from beatstudio.music_provider import SunoClient, compose_suno_edit_instruction, download_audio
 from beatstudio.plans import PLANS
+from beatstudio.narrative import NarrativePlanner
 from beatstudio.renderer import VideoRenderer
 from beatstudio.stock_media import PexelsVideoCatalog
 from beatstudio.usage import quota_for
@@ -227,7 +228,43 @@ else:
             except Exception as exc: st.exception(exc)
     if st.session_state.get("ai_dj_audio_path"): st.audio(st.session_state["ai_dj_audio_path"])
 
-st.subheader("3. Intelligent directing & automatic effects")
+st.subheader("3. Narrative Director")
+narrative_enabled=st.toggle(
+    "Automatic narrative planning",
+    value=("scene_understanding" in plan.features),
+    disabled=("scene_understanding" not in plan.features),
+    help="Analyzes the whole song first, assigns each structural section an editorial role, then guides shot selection and pacing.",
+)
+if narrative_enabled:
+    preview_audio=None
+    if music_mode=="Upload music" and uploaded_audio is not None:
+        preview_dir=tempfile.mkdtemp(prefix="beatsync_narrative_")
+        preview_audio=save_upload(uploaded_audio,preview_dir,"preview")
+    elif music_mode=="Generate with Suno":
+        preview_audio=st.session_state.get("suno_generated_audio_path")
+    elif music_mode=="Edit with Suno":
+        preview_audio=st.session_state.get("suno_edited_audio_path")
+    elif music_mode=="AI DJ / licensed catalog":
+        preview_audio=st.session_state.get("ai_dj_audio_path")
+
+    if preview_audio and os.path.exists(preview_audio):
+        try:
+            plan_preview=NarrativePlanner(preview_audio,plan.intelligent_sync_level).plan()
+            st.caption("Narrative arc: "+plan_preview.arc)
+            for section in plan_preview.sections:
+                with st.expander(f"{section.start:05.1f}s–{section.end:05.1f}s · {section.label}"):
+                    st.write(section.intent)
+                    st.write("**Shot language:**",section.shot_scale,"·",section.motion_style)
+                    st.write("**Emotional tone:**",section.emotional_tone)
+                    st.write("**Preferred visuals:**",", ".join(section.preferred_tags))
+                    st.write("**Effects direction:**",", ".join(section.effect_direction))
+                    st.write("**Seedance hero prompt:**",section.seedance_prompt)
+        except Exception as exc:
+            st.warning(f"Narrative preview unavailable: {exc}")
+    else:
+        st.caption("Prepare a soundtrack to preview the narrative shot plan.")
+
+st.subheader("4. Intelligent directing & automatic effects")
 director_mode=st.toggle("Scene-aware Auto Director",value=asset_count>1,help="Chooses clips by semantic fit: performers, dancing, cars, landscapes, close-ups, wide shots, motion and emotional tone.")
 auto_vfx=st.toggle("Automatic beat/tempo-aware video effects",value=True)
 auto_sfx_allowed="auto_sound_fx" in plan.features
@@ -235,7 +272,7 @@ auto_sfx=st.toggle("Automatic sound design (impacts, whooshes, risers)",value=Fa
 if not auto_sfx_allowed:
     st.caption("Automatic sound design unlocks on Pro.")
 
-st.subheader("4. Manual Effect Rack")
+st.subheader("5. Manual Effect Rack")
 enabled={}; rank=TIER_RANK[plan_key]
 for category in sorted(set(s.category for s in SPECS)):
     with st.expander(category,expanded=category in ("Motion","Subject","Glitch")):
@@ -248,7 +285,7 @@ for category in sorted(set(s.category for s in SPECS)):
                 if on and not locked:
                     enabled[spec.key]=st.slider("Intensity",0.0,1.0,float(spec.default_intensity),.05,key="int_"+spec.key,label_visibility="collapsed")
 
-st.subheader("5. Render")
+st.subheader("6. Render")
 if st.button("Render intelligent music video",type="primary",use_container_width=True):
     workspace=tempfile.mkdtemp(prefix="beatsync_project_")
     clip_paths=[save_upload(clip,workspace,f"upload_{i}") for i,clip in enumerate(uploads or [])]
@@ -270,7 +307,7 @@ if st.button("Render intelligent music video",type="primary",use_container_width
         video_input=clip_paths[0]
         if director_mode and len(clip_paths)>1:
             directed=os.path.join(workspace,"auto_directed.mp4")
-            director_cfg=DirectorConfig(semantic_matching=("scene_understanding" in plan.features))
+            director_cfg=DirectorConfig(semantic_matching=("scene_understanding" in plan.features),narrative_planning=narrative_enabled)
             MultiClipDirector(clip_paths,audio_path,directed,intelligence_level=plan.intelligent_sync_level,config=director_cfg).build(
                 lambda x:bar.progress(min(.35,x*.35),"Scene-aware director is choosing shots…")
             )
