@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 
 from beatstudio.ai_dj import AIDJ, AudioCompatibility, JamendoCatalog
-from beatstudio.director import MultiClipDirector
+from beatstudio.director import MultiClipDirector, DirectorConfig
 from beatstudio.effects import SPECS, TIER_RANK
 from beatstudio.music_provider import SunoClient, compose_suno_edit_instruction, download_audio
 from beatstudio.plans import PLANS
@@ -59,7 +59,10 @@ video_tabs=st.tabs(["Seedance generation","Pexels stock video"])
 
 with video_tabs[0]:
     seedance=SeedanceClient()
-    if not seedance.configured:
+    seedance_allowed="seedance_generation" in plan.features
+    if not seedance_allowed:
+        st.warning("Seedance generation unlocks on Creator.")
+    elif not seedance.configured:
         st.info("Set BYTEPLUS_ARK_API_KEY to enable Seedance 2.5 generation.")
     seed_prompt=st.text_area("Video prompt",placeholder="Cinematic night performance in Nairobi, energetic handheld camera, neon rain, dramatic close-ups...",key="seed_prompt")
     c1,c2,c3=st.columns(3)
@@ -68,7 +71,7 @@ with video_tabs[0]:
     seed_audio=c3.checkbox("Generate synchronized audio",value=False)
     seed_ref_url=st.text_input("Optional public image/video/audio reference URL")
     seed_ref_kind=st.selectbox("Reference type",["image","video","audio"])
-    if st.button("Generate clip with Seedance",disabled=not seedance.configured or not seed_prompt.strip(),use_container_width=True):
+    if st.button("Generate clip with Seedance",disabled=not seedance_allowed or not seedance.configured or not seed_prompt.strip(),use_container_width=True):
         try:
             refs=[]
             if seed_ref_url.strip():
@@ -189,6 +192,9 @@ elif music_mode=="Edit with Suno":
 
 else:
     catalog=JamendoCatalog()
+    dj_allowed="ai_dj" in plan.features
+    if not dj_allowed:
+        st.warning("AI DJ unlocks on Pro.")
     st.caption("AI DJ finds musically compatible tracks using BPM, harmonic key, energy and spectral brightness.")
     reference=st.file_uploader("Reference/current song",type=["mp3","wav","m4a","aac","flac"],key="dj_reference")
     query=st.text_input("Catalog search",placeholder="afro house energetic female vocal")
@@ -197,7 +203,7 @@ else:
     gender=d2.selectbox("Vocal gender",["","female","male"])
     instrumental=d3.selectbox("Vocal type",["any","instrumental","vocal"])
     if not catalog.configured: st.info("Set JAMENDO_CLIENT_ID to search Jamendo.")
-    if st.button("Search licensed catalog",disabled=not catalog.configured or not query.strip()):
+    if st.button("Search licensed catalog",disabled=not dj_allowed or not catalog.configured or not query.strip()):
         try:
             st.session_state["jamendo_results"]=catalog.search(query.strip(),speed=speed or None,gender=gender or None,instrumental=None if instrumental=="any" else instrumental=="instrumental",pro_licensing=True,limit=20)
         except Exception as exc: st.exception(exc)
@@ -207,7 +213,7 @@ else:
         idx=st.selectbox("Candidate track",range(len(tracks)),format_func=lambda i:labels[i])
         track=tracks[idx]
         st.caption("Commercial licensing still has to be obtained for the selected track; pro-licensing search is discovery, not proof of clearance.")
-        if reference and st.button("Analyze and build beat-matched switch",use_container_width=True):
+        if reference and st.button("Analyze and build beat-matched switch",disabled=not dj_allowed,use_container_width=True):
             try:
                 td=tempfile.mkdtemp(prefix="beatsync_dj_")
                 ref_path=save_upload(reference,td,"reference")
@@ -224,7 +230,10 @@ else:
 st.subheader("3. Intelligent directing & automatic effects")
 director_mode=st.toggle("Scene-aware Auto Director",value=asset_count>1,help="Chooses clips by semantic fit: performers, dancing, cars, landscapes, close-ups, wide shots, motion and emotional tone.")
 auto_vfx=st.toggle("Automatic beat/tempo-aware video effects",value=True)
-auto_sfx=st.toggle("Automatic sound design (impacts, whooshes, risers)",value=False)
+auto_sfx_allowed="auto_sound_fx" in plan.features
+auto_sfx=st.toggle("Automatic sound design (impacts, whooshes, risers)",value=False,disabled=not auto_sfx_allowed)
+if not auto_sfx_allowed:
+    st.caption("Automatic sound design unlocks on Pro.")
 
 st.subheader("4. Manual Effect Rack")
 enabled={}; rank=TIER_RANK[plan_key]
@@ -261,7 +270,8 @@ if st.button("Render intelligent music video",type="primary",use_container_width
         video_input=clip_paths[0]
         if director_mode and len(clip_paths)>1:
             directed=os.path.join(workspace,"auto_directed.mp4")
-            MultiClipDirector(clip_paths,audio_path,directed,intelligence_level=plan.intelligent_sync_level).build(
+            director_cfg=DirectorConfig(semantic_matching=("scene_understanding" in plan.features))
+            MultiClipDirector(clip_paths,audio_path,directed,intelligence_level=plan.intelligent_sync_level,config=director_cfg).build(
                 lambda x:bar.progress(min(.35,x*.35),"Scene-aware director is choosing shots…")
             )
             video_input=directed
