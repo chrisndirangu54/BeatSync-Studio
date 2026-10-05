@@ -211,3 +211,114 @@ Never expose `SUNO_API_KEY`, Stripe secrets or storage credentials to browser co
 ## License
 
 Choose a license before public commercial launch. No license is included by default.
+
+
+## Visual scene understanding
+
+The Auto Director can now score each clip semantically before editing. `beatstudio/scene_understanding.py` combines YOLO object detection, Haar face detection, optical-flow motion analysis, shot-scale heuristics and optional CLIP zero-shot scene semantics.
+
+The resulting `SceneProfile` includes signals for:
+
+- people and faces,
+- performers,
+- dancing,
+- cars/vehicles,
+- landscapes,
+- close-up vs wide shot,
+- motion intensity,
+- approximate joyful / sad / intense / calm tone.
+
+During a cut, `music_scene_score()` compares those visual signals with the current `BeatState`. High-energy drops prefer dancing, motion, performers and cars; quieter sections prefer close-ups, landscapes and calmer emotional imagery.
+
+Install the optional semantic model stack with:
+
+```bash
+pip install -r requirements-vision.txt
+```
+
+Without the optional CLIP stack, the director still falls back to object, face, shot-scale and motion signals.
+
+## Structured Suno editing
+
+The Suno editor now exposes structured controls for:
+
+- adding/emphasizing instruments,
+- removing/reducing instruments,
+- changing genre/style,
+- target tempo/BPM,
+- pitch transposition in semitones,
+- female/male lead-vocal character,
+- preserving melody,
+- preserving lyrics.
+
+These controls are translated into a precise natural-language v6 edit instruction, keeping the provider integration flexible rather than assuming undocumented parameter names.
+
+## AI DJ
+
+`beatstudio/ai_dj.py` analyzes tracks with Librosa and compares:
+
+- BPM, including sensible half-time/double-time compatibility,
+- estimated chroma/key,
+- RMS energy,
+- spectral brightness.
+
+The AI DJ can time-stretch the incoming track toward the outgoing tempo, optionally transpose toward the reference key, and create an equal-power beatmatched crossfade.
+
+Jamendo support is included for catalog discovery. The search adapter can request tracks enrolled in Jamendo's pro-licensing program and filter by search text, tags, speed, instrumental/vocal mode and vocalist gender.
+
+**Important:** catalog discovery is not license clearance. A track still needs the appropriate commercial/synchronization license before release.
+
+## Seedance 2.5
+
+`beatstudio/video_provider.py` integrates the official BytePlus ModelArk video-generation API using Dreamina Seedance 2.5.
+
+Supported product flows include:
+
+- text-to-video,
+- image/video/audio references,
+- reference-to-video,
+- video editing,
+- video extension,
+- optional synchronized audio generation,
+- 4–30 second generations,
+- asynchronous job polling.
+
+Configure:
+
+```bash
+BYTEPLUS_ARK_API_KEY=
+SEEDANCE_API_BASE=https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks
+```
+
+## Stock video
+
+`beatstudio/stock_media.py` adds Pexels video search. Users can search by prompt and orientation, preview a result, add it to the project and keep its attribution metadata for export.
+
+Configure:
+
+```bash
+PEXELS_API_KEY=
+```
+
+## Automatic sound and visual effects
+
+`beatstudio/auto_fx.py` maps the live music state to automatic video effects. Ordinary beats stay subtle, strong onsets add transient effects, and drops trigger the strongest reactions.
+
+`beatstudio/sound_fx.py` can synthesize and mix original transition sounds without relying on a copyrighted SFX pack:
+
+- low-frequency impacts,
+- whooshes,
+- risers.
+
+These are placed at strong drop peaks and structural song boundaries detected from the same Librosa analysis driving the visual effects.
+
+## Updated entitlements
+
+| Tier | Key additions |
+|---|---|
+| Free | Uploads, stock search, basic beat sync, rhythm-based Auto Director |
+| Pro | Semantic scene matching, Suno generation, AI DJ, licensed-catalog discovery, automatic sound design |
+| Creator | 4K, Suno structured editing, Seedance generation, full song-structure intelligence |
+| Studio | All features plus higher quotas, batch/team/priority architecture |
+
+Generated media and catalog/API usage should be metered separately from render minutes because the upstream providers have their own variable costs.
