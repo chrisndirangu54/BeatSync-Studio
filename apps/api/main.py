@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from beatstudio.director import DirectorConfig, MultiClipDirector
@@ -17,6 +17,8 @@ from beatstudio.effects import SPECS
 from beatstudio.narrative import NarrativePlanner
 from beatstudio.plans import PLANS
 from beatstudio.renderer import VideoRenderer
+from .auth import Principal, require_admin, require_user
+from .admin import router as admin_router
 
 app = FastAPI(
     title="BeatSync Studio API",
@@ -36,6 +38,7 @@ app.add_middleware(
 JOBS: dict[str, dict] = {}
 OUTPUT_DIR = Path(os.getenv("BEATSYNC_OUTPUT_DIR", "/tmp/beatsync-outputs"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+app.include_router(admin_router)
 
 def save_upload(upload: UploadFile, directory: Path, prefix: str) -> Path:
     suffix = Path(upload.filename or "").suffix
@@ -74,7 +77,7 @@ def effects():
     } for s in SPECS]
 
 @app.post("/v1/narrative/plan")
-def narrative_plan(audio: UploadFile = File(...), intelligence_level: int = Form(3)):
+def narrative_plan(audio: UploadFile = File(...), intelligence_level: int = Form(3), user: Principal = Depends(require_user)):
     workspace = Path(tempfile.mkdtemp(prefix="beatsync_narrative_"))
     try:
         audio_path = save_upload(audio, workspace, "audio")
@@ -147,11 +150,15 @@ def create_render(
     narrative_planning: bool = Form(True),
     automatic_fx: bool = Form(True),
     automatic_sound_fx: bool = Form(False),
+    user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
         raise HTTPException(400, "Unknown plan")
     if not videos:
         raise HTTPException(400, "At least one video is required")
+    effective_plan = plan_key if user.admin else user.plan
+    if effective_plan not in PLANS:
+        effective_plan = "free"
 
     try:
         effects = {str(k): float(v) for k, v in json.loads(effects_json).items()}
@@ -168,6 +175,9 @@ def create_render(
         "status": "queued",
         "progress": 0.0,
         "execution_mode": os.getenv("RENDER_EXECUTION_MODE", "local-thread"),
+        "owner_uid": user.uid,
+        "owner_email": user.email,
+        "plan_key": effective_plan,
     }
 
     thread = threading.Thread(
@@ -177,7 +187,7 @@ def create_render(
             workspace=workspace,
             audio_path=audio_path,
             video_paths=video_paths,
-            plan_key=plan_key,
+            plan_key=effective_plan,
             effects=effects,
             scene_aware=scene_aware,
             narrative_planning=narrative_planning,
@@ -189,8 +199,42 @@ def create_render(
     thread.start()
     return JOBS[job_id]
 
+@app.get("/v1/auth/me")
+def auth_me(user: Principal = Depends(require_user)):
+    return {
+        "uid": user.uid,
+        "email": user.email,
+        "email_verified": user.email_verified,
+        "role": user.role,
+        "admin": user.admin,
+        "plan": user.plan,
+        "permissions": user.permissions,
+    }
+
 @app.get("/v1/renders/{job_id}")
-def render_status(job_id: str):
+def render_status(job_id: str, user: Principal = Depends(require_user)):
     if job_id not in JOBS:
         raise HTTPException(404, "Render job not found")
-    return JOBS[job_id]
+    job = JOBS[job_id]
+    if not user.admin and job.get("owner_uid") != user.uid:
+        raise HTTPException(403, "You do not have access to this render")
+    return job
+
+@app.get("/v1/admin/renders")
+def admin_renders(_: Principal = Depends(require_admin)):
+    return list(JOBS.values())
+
+@app.delete("/v1/admin/renders/{job_id}")
+def admin_delete_render(job_id: str, _: Principal = Depends(require_admin)):
+    if job_id not in JOBS:
+        raise HTTPException(404, "Render job not found")
+    if JOBS[job_id].get("status") == "running":
+        raise HTTPException(409, "Running local-thread jobs cannot be safely cancelled")
+    job = JOBS.pop(job_id)
+    output = job.get("output_path")
+    if output:
+        try:
+            Path(output).unlink(missing_ok=True)
+        except OSError:
+            pass
+    return {"id": job_id, "deleted": True}
