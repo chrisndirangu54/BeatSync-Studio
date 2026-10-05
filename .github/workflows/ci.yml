@@ -13,9 +13,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+      - name: Install test dependencies
+        run: pip install -r requirements-ci.txt
       - name: Compile
         run: python -m compileall -q app.py beatstudio tests
       - name: Test
-        run: pytest -q
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
