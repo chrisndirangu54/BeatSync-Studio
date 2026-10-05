@@ -5,7 +5,7 @@ import type { User } from "firebase/auth";
 import { logout, watchAuth } from "@/lib/firebase";
 import { authJSON } from "@/lib/api";
 
-type Me = { uid:string; email:string|null; role:string; admin:boolean; permissions:string[] };
+type Me = { uid:string; email:string|null; role:string; admin:boolean; plan:string; permissions:string[] };
 
 export default function UserMenu(){
   const [user,setUser]=useState<User|null>(null);
@@ -19,7 +19,13 @@ export default function UserMenu(){
 
   if(!user) return null;
   return <div className="userMenu">
-    <div><b>{user.displayName||user.email||"User"}</b><span>{me?.admin?"Platform Admin":me?.role||"User"}</span></div>
-    <button className="toggle" onClick={()=>logout()}>Sign out</button>
+    <div>
+      <b>{user.displayName||user.email||"User"}</b>
+      <span>{me?.admin?"Platform Admin":(me?.role||"User")+" · "+(me?.plan||"free")}</span>
+    </div>
+    <div className="userMenuActions">
+      {me?.admin&&<a className="toggle adminLink" href="/admin">Admin</a>}
+      <button className="toggle" onClick={()=>logout()}>Sign out</button>
+    </div>
   </div>
 }
