@@ -1,0 +1,4 @@
+-r requirements.txt
+transformers>=4.45
+torch>=2.2
+Pillow>=10.0
