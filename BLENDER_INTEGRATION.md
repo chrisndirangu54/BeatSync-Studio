@@ -38,3 +38,20 @@
 - Blender 4.3+ or a pinned compatible build, FFmpeg, Python audio/vision stack.
 - The Blender scripts run with `blender -b --python` in a sandboxed environment.
 - Physically accurate gas/liquid layers require Mantaflow baking, cache storage and integration testing. Use approved scene manifest inputs only.
+
+## Beat-reactive 3D Asset Animation
+
+An additional modular animation engine supports Blender primitives and uploaded binary glTF 2.0 (.glb) assets. Each asset layer has independently selectable signal (beat/onset/bass/mids/treble/energy/drop), motion (pulse, spin, bounce, orbit, wobble, scale or material-glow preset), intensity, speed, 3D position, neon color and scale.
+
+The React editor supports at most eight asset layers and eight uploaded GLB files; uploads have a 50 MiB limit each and are copied into a dedicated render-job workspace. The GLB header is checked before Blender imports the file. Note: header validation is not a full asset security scan. Blender import and GPU processing **must** run in containers without external network access, with strict CPU/RAM/time limits.
+
+The `/v1/assets/animation-options` endpoint advertises supported controls. `POST /v1/renders` accepts `asset_layers_json` and the multipart `assets` fields, with predictable IDs `asset_0`, `asset_1`, etc. Example JSON:
+
+```json
+[
+  {"name":"Brand logo","source":"glb","asset_id":"asset_0","animation":"pulse","signal":"bass","intensity":0.8,"color":"cyan"},
+  {"name":"3D Wave","source":"torus","animation":"spin","signal":"treble","color":"magenta"}
+]
+```
+
+Only Creator/Studio plans can request asset rendering via this endpoint. All models are rendered with a shared neon-emission aesthetic; sophisticated preservation of user-authored glTF material graphs, animations, skeleton rigging and physics interactions remain future work. Animated transforms have not yet been tested inside an actual Blender runtime.
