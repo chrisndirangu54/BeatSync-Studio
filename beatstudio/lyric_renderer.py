@@ -46,6 +46,13 @@ class LyricRenderer:
         y=int(h*{"top":.12,"middle":.43,"bottom":.77}[cue.position])
         step=max(24,int(w*.066))
         progress=max(0,min(1,(state.t-cue.start)/(cue.end-cue.start)))
+        if cue.words:
+            # Time-based progression through each spoken word rather than linear line duration.
+            lengths=[len(str(word[0]))+1 for word in cue.words]
+            weighted_total=sum(lengths)
+            elapsed=sum(length*max(0,min(1,(state.t-float(word[1]))/(float(word[2])-float(word[1]))))
+                        for word,length in zip(cue.words,lengths))
+            progress=elapsed/max(1,weighted_total)
         for row,line in enumerate(lines):
             bbox=draw.textbbox((0,0),line,font=font,stroke_width=3)
             tw=bbox[2]-bbox[0]; x=max(0,(w-tw)//2)
