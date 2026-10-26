@@ -45,7 +45,7 @@ def plan_prompt(prompt:str, *, duration:float=30, intensity:float=.7):
     text_match=re.search(r'(?:show|display|write|title|caption)\s+[\\"\'“]?(.{1,100}?)[\\"\'”]?(?:[.!?]|$)',prompt,re.I)
     caption=(text_match.group(1).strip(" \"'“”") if text_match else "")
     if caption:
-        cue=MotionCue(text=caption[:100],start=0,duration=min(4,float(duration)),style="title",trigger=signal,position="center").validate()
+        cue=MotionCue(text=caption[:100],start=0,duration=min(4,float(duration)),style="title",trigger=signal,position="middle").validate()
         step("typography","add_title","Provides editable timecoded title rather than inventing lyrics",{"motion_cues":[asdict(cue)]})
     font_style="calligraphy" if any(s in p for s in ("calligraphy","cursive","script")) else "neon_script" if "neon" in p else "karaoke"
     step("typography","set_lyrics_theme","Uses an editable style template; no lyrics are fabricated",{"lyric_theme":{"style":font_style,"font":"script" if font_style!="karaoke" else "sans","color":COLORS.get(hue,"#FFFFFF"),"highlight":"#FF40FF","signal":signal}})
