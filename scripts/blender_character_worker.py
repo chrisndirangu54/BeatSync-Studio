@@ -12,9 +12,21 @@ scene.render.resolution_x=m["width"];scene.render.resolution_y=m["height"];scene
 scene.render.film_transparent=True;scene.render.fps=m["fps"]
 scene.render.image_settings.file_format="PNG";scene.render.image_settings.color_mode="RGBA"
 def safe_path(identifier):
-    p=(root/(identifier+".glb")).resolve()
-    if root not in p.parents or not p.is_file():raise RuntimeError("Missing project-scoped GLB")
+    path=m.get("asset_paths",{}).get(identifier)
+    if not path: raise RuntimeError("Missing project-scoped asset")
+    p=Path(path).resolve()
+    if p.suffix.lower() not in {".glb",".fbx",".bvh"} or not p.is_file():
+        raise RuntimeError("Invalid motion asset")
+    if not any(folder in p.parents for folder in [root,root.parent/"motions"]):
+        raise RuntimeError("Asset outside project workspace")
     return p
+
+def import_motion(path):
+    ext=path.suffix.lower()
+    if ext==".glb": bpy.ops.import_scene.gltf(filepath=str(path))
+    elif ext==".fbx": bpy.ops.import_scene.fbx(filepath=str(path))
+    elif ext==".bvh": bpy.ops.import_anim.bvh(filepath=str(path))
+    else: raise RuntimeError("Unsupported animation type")
 tracks=[]
 for spec in m["characters"]:
     before=set(bpy.data.objects)
@@ -28,7 +40,7 @@ for spec in m["characters"]:
     if spec["motion"]=="imported" and spec["animation_id"]:
         # Source animation must be a rigged GLB with a compatible skeleton.
         before_motion=set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=str(safe_path(spec["animation_id"])))
+        import_motion(safe_path(spec["animation_id"]))
         motion_arms=[o for o in set(bpy.data.objects)-before_motion if o.type=="ARMATURE"]
         if armatures and motion_arms:
             source=motion_arms[0];target=armatures[0]
