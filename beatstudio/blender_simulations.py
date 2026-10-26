@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Mapping
 import json
+import math
 
 PRESETS = {
     "neon_particles": ("particles", "treble"),
@@ -42,9 +43,9 @@ class SimulationLayer:
         if self.preset not in PRESETS: raise ValueError("Unsupported simulation preset")
         if (self.signal or PRESETS[self.preset][1]) not in SIGNALS: raise ValueError("Invalid audio signal")
         if self.color_a not in PALETTE or self.color_b not in PALETTE: raise ValueError("Unknown color")
-        if not 0 <= self.intensity <= 1: raise ValueError("Invalid intensity")
+        if not isinstance(self.intensity,(int,float)) or not math.isfinite(self.intensity) or not 0 <= self.intensity <= 1: raise ValueError("Invalid intensity")
         if self.quality not in {"preview","final"}: raise ValueError("Invalid quality")
-        if not 0 <= self.seed <= 2**31-1: raise ValueError("Invalid seed")
+        if not isinstance(self.seed,int) or not 0 <= self.seed <= 2**31-1: raise ValueError("Invalid seed")
         return self
 
     def manifest(self):
@@ -64,9 +65,9 @@ def build_simulation_manifest(layers, audio_samples, fps=30, width=1920, height=
     if not 1 <= len(layers) <= 12: raise ValueError("Require 1–12 layers")
     if not 12 <= fps <= 60 or width not in {640,1280,1920,3840} or height not in {360,720,1080,2160}:
         raise ValueError("Invalid render parameters")
-    if len(audio_samples) > 36000: raise ValueError("Timeline too long")
+    if not 1 <= len(audio_samples) <= 36000: raise ValueError("Timeline must contain 1–36000 frames")
     for row in audio_samples:
-        if set(row) - SIGNALS or any(not isinstance(v,(int,float)) or not 0 <= v <= 1 for v in row.values()):
+        if set(row) - SIGNALS or any(not isinstance(v,(int,float)) or not math.isfinite(v) or not 0 <= v <= 1 for v in row.values()):
             raise ValueError("Invalid signal samples")
     return {"schema_version": 1, "engine": "blender",
             "fps":fps,"width":width,"height":height,
