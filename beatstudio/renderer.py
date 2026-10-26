@@ -6,14 +6,16 @@ from .effects import REGISTRY, TIER_RANK, apply_effect
 from .plans import get_plan
 from .auto_fx import AutoFXPolicy
 from .sound_fx import SoundFXEngine
+from .visual_suite import VisualSuite, VisualSuiteConfig
 
 class VideoRenderer:
-    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False):
+    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, visual_suite: VisualSuiteConfig|None=None):
         self.video_path=video_path; self.audio_path=audio_path; self.output_path=output_path
         self.plan=get_plan(plan_key); self.enabled=enabled or {}
         self.automatic_fx=automatic_fx; self.automatic_sound_fx=automatic_sound_fx
         self.sync=IntelligentBeatSync(audio_path, self.plan.intelligent_sync_level)
         self.prev_frame=None
+        self.visual_suite=VisualSuite(visual_suite) if visual_suite is not None else None
 
     def validate_effects(self):
         allowed=[]
@@ -47,6 +49,8 @@ class VideoRenderer:
             for key,intensity in effects + dynamic:
                 if key!='ghost_trail': out=apply_effect(out,key,intensity,state,idx)
             previous_section=state.section
+            if self.visual_suite is not None:
+                out=self.visual_suite.apply(out,state,idx)
             if self.plan.watermark:
                 cv2.putText(out,'BeatSync Studio • Free',(16,oh-16),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
             self.prev_frame=out.copy(); writer.write(out); idx+=1

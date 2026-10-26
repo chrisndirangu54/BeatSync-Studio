@@ -10,6 +10,10 @@ from beatstudio.music_provider import SunoClient, compose_suno_edit_instruction,
 from beatstudio.plans import PLANS
 from beatstudio.narrative import NarrativePlanner
 from beatstudio.renderer import VideoRenderer
+from beatstudio.visual_suite import VisualSuiteConfig
+from beatstudio.motion_planner import compile_storyboard
+from beatstudio.blender_bridge import BlenderSceneRequest
+import json
 from beatstudio.stock_media import PexelsVideoCatalog
 from beatstudio.usage import quota_for
 from beatstudio.video_provider import SeedanceClient, download_video
@@ -285,8 +289,24 @@ for category in sorted(set(s.category for s in SPECS)):
                 if on and not locked:
                     enabled[spec.key]=st.slider("Intensity",0.0,1.0,float(spec.default_intensity),.05,key="int_"+spec.key,label_visibility="collapsed")
 
-st.subheader("6. Render")
-if st.button("Render intelligent music video",type="primary",use_container_width=True):
+st.subheader("6. AI Visual Suite (optional)")
+outline_enabled=st.toggle("YOLO neural neon body outline",value=False,help="Person-instance segmentation with the existing BeatSync neon palette. Requires YOLO segmentation weights.")
+outline_strength=st.slider("Neon outline strength",0.0,1.0,0.75,.05,disabled=not outline_enabled)
+storyboard_text=st.text_area("AI motion graphics / meme timeline (JSON)",value='{"cues":[]}',height=110,help='Each cue: start, end, mode (caption/meme/explainer/asset), text or local asset, trigger and threshold.')
+try:
+    storyboard_cues=compile_storyboard(json.loads(storyboard_text))
+    storyboard_error=None
+except (ValueError,KeyError,TypeError) as exc:
+    storyboard_cues=[];storyboard_error=str(exc)
+    st.error("Invalid storyboard: "+storyboard_error)
+with st.expander("Blender MCP scene specification"):
+    blender_prompt=st.text_area("3D scene prompt",placeholder="Chrome neon logo, camera orbit, cyan and magenta lighting")
+    if blender_prompt.strip():
+        st.code(BlenderSceneRequest(blender_prompt).to_json(),language="json")
+        st.caption("This is a sandboxed render-job specification for a separately deployed Blender MCP worker, not an executed Blender render.")
+
+st.subheader("7. Render")
+if st.button("Render intelligent music video",type="primary",use_container_width=True,disabled=storyboard_error is not None):
     workspace=tempfile.mkdtemp(prefix="beatsync_project_")
     clip_paths=[save_upload(clip,workspace,f"upload_{i}") for i,clip in enumerate(uploads or [])]
     clip_paths+=list(st.session_state.get("generated_video_paths",[]))
@@ -313,7 +333,7 @@ if st.button("Render intelligent music video",type="primary",use_container_width
             )
             video_input=directed
         output=os.path.join(workspace,"beatsync_output.mp4")
-        renderer=VideoRenderer(video_input,audio_path,output,plan_key,enabled,automatic_fx=auto_vfx,automatic_sound_fx=auto_sfx)
+        renderer=VideoRenderer(video_input,audio_path,output,plan_key,enabled,automatic_fx=auto_vfx,automatic_sound_fx=auto_sfx,visual_suite=VisualSuiteConfig(body_outline=outline_enabled,outline_intensity=outline_strength,cues=storyboard_cues))
         renderer.render(lambda x:bar.progress(.35+x*.65 if director_mode and len(clip_paths)>1 else x,"Rendering beat-aware effects…"))
         bar.progress(1.0,"Complete")
         st.video(output)
