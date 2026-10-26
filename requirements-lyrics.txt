@@ -1,0 +1,3 @@
+# Optional offline lyric transcription worker dependencies
+# Install separately on CPU/GPU audio workers, not the public web container.
+faster-whisper>=1.1,<2

@@ -4,10 +4,12 @@ No cloud upload occurs. This is a CPU/GPU worker feature and is not required
 for ordinary manual lyrics or LRC/SRT import.
 """
 from __future__ import annotations
-from dataclasses import dataclass
 from .lyrics import LyricCue
+from functools import lru_cache
 
 def words_to_cues(segments, *, max_words=7, max_duration=4.0):
+    if not 1 <= max_words <= 30 or not .5 <= max_duration <= 30:
+        raise ValueError('Invalid grouping limits')
     words=[]
     for segment in segments:
         for word in segment.get("words",[]):
@@ -32,7 +34,13 @@ def transcribe_local(audio_path, *, model_size="small", device="cpu", language=N
         from faster_whisper import WhisperModel
     except ImportError as exc:
         raise RuntimeError("Install faster-whisper on a transcription worker") from exc
-    model=WhisperModel(model_size,device=device,compute_type="int8" if device=="cpu" else "float16")
+    model=_load_model(model_size,device)
     segments,meta=model.transcribe(str(audio_path),language=language,word_timestamps=True,vad_filter=True)
     result=[{"words":[{"word":w.word,"start":w.start,"end":w.end} for w in (s.words or [])]} for s in segments]
     return {"language":meta.language,"cues":[c.manifest() for c in words_to_cues(result)]}
+
+@lru_cache(maxsize=2)
+def _load_model(model_size, device):
+    from faster_whisper import WhisperModel
+    return WhisperModel(model_size,device=device,
+                        compute_type="int8" if device=="cpu" else "float16")
