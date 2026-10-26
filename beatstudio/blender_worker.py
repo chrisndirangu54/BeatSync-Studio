@@ -80,3 +80,27 @@ def render_asset_layers(layers, asset_paths, audio_samples, output_dir, *,
     if not list(output.glob("frame_*.png")):
         raise RuntimeError("Blender did not generate asset frames")
     return [output]
+
+def render_character_layers(characters, camera, asset_paths, samples, output_dir, *, fps=30, width=1280, height=720, blender_binary="blender"):
+    """Run reviewed character scene with project-scoped assets only."""
+    from .character_animation import character_manifest
+    manifest=character_manifest(characters,camera,samples,fps,width,height)
+    output=Path(output_dir).resolve();output.mkdir(parents=True,exist_ok=True)
+    root=Path(next(iter(asset_paths.values()))).resolve().parent if asset_paths else None
+    if root is None: raise ValueError("Character GLB uploads missing")
+    for layer in characters:
+        for identifier in (layer.asset_id,layer.animation_id):
+            if identifier:
+                p=Path(asset_paths[identifier]).resolve()
+                if root not in p.parents or not p.is_file(): raise ValueError("Unsafe asset path")
+    manifest["asset_root"]=str(root)
+    path=output/"characters.json";path.write_text(json.dumps(manifest),encoding="utf8")
+    if not shutil.which(blender_binary):raise RuntimeError("Blender executable unavailable")
+    script=Path(__file__).resolve().parents[1]/"scripts"/"blender_character_worker.py"
+    cmd=[blender_binary,"-b","-t","4","--python",str(script),"--",str(path),str(output)]
+    try:
+        subprocess.run(cmd,check=True,capture_output=True,text=True,timeout=3600)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError("Character render failed: "+(exc.stderr or exc.stdout)[-2500:]) from exc
+    if not list(output.glob("frame_*.png")): raise RuntimeError("No character frames rendered")
+    return [output]
