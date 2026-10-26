@@ -84,12 +84,7 @@ def effects():
 def narrative_plan(audio: UploadFile = File(...), intelligence_level: int = Form(3), user: Principal = Depends(require_user)):
     workspace = Path(tempfile.mkdtemp(prefix="beatsync_narrative_"))
     try:
-        try:
-        asset_paths=prepare_assets(asset_layers,assets,workspace)
-    except ValueError as exc:
-        shutil.rmtree(workspace,ignore_errors=True)
-        raise HTTPException(400,str(exc))
-    audio_path = save_upload(audio, workspace, "audio")
+        audio_path = save_upload(audio, workspace, "audio")
         return NarrativePlanner(
             str(audio_path),
             intelligence_level=max(3, intelligence_level),
