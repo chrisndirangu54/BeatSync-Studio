@@ -45,6 +45,8 @@ for index in range(2):
     mod.flow_settings.use_initial_velocity=True
     mod.flow_settings.velocity_coord=(.6 if index==0 else -.6,0,1.0)
     mod.flow_settings.flow_source="MESH"
+    if preset!="ink_mixing":
+        mod.flow_settings.smoke_color=tuple(colors[index][:3])
     emitter.hide_render=True
     flows.append(mod.flow_settings)
 bpy.ops.mesh.primitive_cube_add(size=2,location=(0,0,2.5))
@@ -65,12 +67,14 @@ else:
     settings.use_noise=True
     settings.vorticity=.35 if preset=="dual_smoke_mix" else 1.5
 # Render a colored volume for gas. Multiple inflows mix physically in a single
-# domain; exact independent dye transport requires dedicated color/advection pass.
+# domain; smoke color is transported by the gas solver. Liquid dye advection remains a separate requirement.
 if preset!="ink_mixing":
     mat=bpy.data.materials.new("VolumetricNeonMix");mat.use_nodes=True
     n=mat.node_tree.nodes;n.clear()
     output=n.new("ShaderNodeOutputMaterial");vol=n.new("ShaderNodeVolumePrincipled")
-    vol.inputs["Color"].default_value=tuple((colors[0][i]+colors[1][i])/2 for i in range(4))
+    volume_color=n.new("ShaderNodeAttribute")
+    volume_color.attribute_name="color"
+    mat.node_tree.links.new(volume_color.outputs["Color"],vol.inputs["Color"])
     vol.inputs["Density"].default_value=1.6
     mat.node_tree.links.new(vol.outputs["Volume"],output.inputs["Volume"])
     domain.data.materials.append(mat)
