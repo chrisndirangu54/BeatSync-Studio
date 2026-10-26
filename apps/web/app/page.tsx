@@ -35,6 +35,10 @@ export default function Home() {
   const [transcriptionError,setTranscriptionError]=useState("");
   const [lyrics,setLyrics]=useState<Array<{text:string;start:number;end:number;style:string;font:string;color:string;highlight:string;outline:string;position:string;signal:string;glow:boolean;bounce:boolean}>>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
+  const [workflowPrompt,setWorkflowPrompt]=useState("");
+  const [workflowPlan,setWorkflowPlan]=useState<any>(null);
+  const [workflowBusy,setWorkflowBusy]=useState(false);
+  const [workflowError,setWorkflowError]=useState("");
   const [rodinPrompt,setRodinPrompt]=useState("");
   const [rodinJob,setRodinJob]=useState<any>(null);
   const [rodinBusy,setRodinBusy]=useState(false);
@@ -48,6 +52,23 @@ export default function Home() {
     for(const effect of effects) (out[effect.category] ||= []).push(effect);
     return out;
   },[effects]);
+
+  async function planWorkflow(){
+    if(!workflowPrompt.trim()||workflowBusy)return;
+    setWorkflowBusy(true);setWorkflowError("");
+    try{const form=new FormData();form.append("prompt",workflowPrompt);
+      setWorkflowPlan(await postForm<any>("/v1/agents/plan",form));
+    }catch(e){setWorkflowError(e instanceof Error?e.message:String(e));}
+    finally{setWorkflowBusy(false);}
+  }
+
+  function applyWorkflow(){
+    if(!workflowPlan?.config)return;
+    const cfg=workflowPlan.config;
+    setBlenderLayers(cfg.blender_layers||[]);
+    setMotionCues(cfg.motion_cues||[]);
+    if(cfg.lyric_theme)setLyrics(ls=>ls.map(line=>({...line,...cfg.lyric_theme})));
+  }
 
   async function transcribeTrack(){
     if(!audio)return;
@@ -112,6 +133,19 @@ export default function Home() {
         <div className="statusCard"><span>API</span><strong>{API_BASE.replace(/^https?:\/\//,"")}</strong></div>
       </header>
 
+
+      <section className="panel">
+        <div className="panelTitle"><span>AI</span><h2>Prompt Director · Agent Workflows</h2></div>
+        <p className="muted">Describe the music video, palette, rhythm and typography. Director, Rhythm, Visual FX, Typography and Quality agents propose a reviewable edit plan. Nothing is rendered or sent to external AI automatically.</p>
+        <label className="field"><span>Creative brief</span><textarea rows={3} maxLength={2000} value={workflowPrompt} onChange={e=>setWorkflowPrompt(e.target.value)} placeholder="Cinematic neon cyan music video, bass-reactive spectrum bars, cursive lyrics, display 'Into the night'..."/></label>
+        <button className="secondary" onClick={planWorkflow} disabled={workflowBusy||workflowPrompt.trim().length<3}>{workflowBusy?"Planning…":"Generate agent workflow"}</button>
+        {workflowError&&<p role="alert">{workflowError}</p>}
+        {workflowPlan&&<div>
+          <p className="muted">Review specialist agent decisions before applying them to your editor.</p>
+          {workflowPlan.steps?.map((step:any,i:number)=><div key={i} className="effectCard"><strong>{step.agent} · {step.action}</strong><p className="muted">{step.rationale}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(step.output,null,2)}</pre></div>)}
+          <button className="secondary" onClick={applyWorkflow}>Apply reviewed workflow to editor</button>
+        </div>}
+      </section>
       <section className="grid two">
         <div className="panel">
           <div className="panelTitle"><span>01</span><h2>Project</h2></div>
