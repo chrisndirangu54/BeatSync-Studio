@@ -55,7 +55,7 @@ def render_asset_layers(layers, asset_paths, audio_samples, output_dir, *,
                                        audio_samples,fps,width,height)
     assets=[layer.manifest() for layer in layers if layer.enabled]
     if not assets: return []
-    root=(output.parent/"assets").resolve()
+    root=Path(next(iter(asset_paths.values()))).resolve().parent if asset_paths else output.resolve()
     safe_paths={}
     for layer in assets:
         if layer["source"]=="glb":
