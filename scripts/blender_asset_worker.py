@@ -14,7 +14,7 @@ frames=manifest["audio_samples"]
 if len(assets)>8 or len(frames)>36000: raise SystemExit("Asset limits exceeded")
 bpy.ops.object.select_all(action="SELECT");bpy.ops.object.delete(use_global=False)
 scene=bpy.context.scene
-scene.render.engine="BLENDER_EEVEE_NEXT"
+scene.render.engine="BLENDER_EEVEE_NEXT" if bpy.app.version >= (4,2,0) else "BLENDER_EEVEE"
 scene.render.film_transparent=True
 scene.render.resolution_x=int(manifest["width"])
 scene.render.resolution_y=int(manifest["height"])
