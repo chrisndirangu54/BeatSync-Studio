@@ -365,6 +365,8 @@ def character_capabilities():
             "mixamo":MixamoAdapter().capability(),
             "huggingface_models":list(HuggingFaceMotionAdapter.MODELS)}
 
+RODIN_TASK_OWNERS: dict[str,str] = {}
+
 @app.post("/v1/rodin/generate")
 def rodin_generate(prompt: str = Form(...), t_pose: bool = Form(False),
                    tier: str = Form("Regular"), user: Principal = Depends(require_user)):
@@ -372,7 +374,12 @@ def rodin_generate(prompt: str = Form(...), t_pose: bool = Form(False),
     if not user.admin and user.plan not in {"creator","studio"}:
         raise HTTPException(403,"Rodin generation requires Creator or Studio")
     try:
-        return RodinClient().generate(prompt,t_pose=t_pose,tier=tier)
+        result=RodinClient().generate(prompt,t_pose=t_pose,tier=tier)
+        subscription=(result.get("jobs") or {}).get("subscription_key")
+        task_id=result.get("uuid")
+        if subscription: RODIN_TASK_OWNERS[subscription]=user.uid
+        if task_id: RODIN_TASK_OWNERS[task_id]=user.uid
+        return result
     except ValueError as exc:
         raise HTTPException(400,str(exc))
     except Exception as exc:
@@ -385,6 +392,8 @@ def rodin_status(subscription_key: str,user: Principal=Depends(require_user)):
         raise HTTPException(403,"Rodin access restricted")
     if len(subscription_key)>256 or not subscription_key.replace("-","").replace("_","").isalnum():
         raise HTTPException(400,"Invalid task key")
+    if not user.admin and RODIN_TASK_OWNERS.get(subscription_key)!=user.uid:
+        raise HTTPException(403,"This Rodin task belongs to another session")
     try: return RodinClient().status(subscription_key)
     except Exception as exc: raise HTTPException(502,"Rodin status request failed") from exc
 
@@ -395,6 +404,9 @@ def rodin_download_links(task_uuid: str,user: Principal=Depends(require_user)):
     try:
         import uuid as uuid_module
         uuid_module.UUID(task_uuid)
+        if not user.admin and RODIN_TASK_OWNERS.get(task_uuid)!=user.uid:
+            raise HTTPException(403,"This Rodin task belongs to another session")
         return RodinClient().download_links(task_uuid)
+    except HTTPException: raise
     except ValueError: raise HTTPException(400,"Invalid Rodin task identifier")
     except Exception as exc: raise HTTPException(502,"Rodin download lookup failed") from exc
