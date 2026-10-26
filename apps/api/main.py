@@ -20,6 +20,7 @@ from beatstudio.renderer import VideoRenderer
 from beatstudio.reactive_overlays import OverlayConfig
 from beatstudio.blender_simulations import SimulationLayer, PRESETS
 from beatstudio.motion_cues import MotionCue
+from beatstudio.asset_animation import AssetLayer, prepare_assets, ANIMATIONS, SHAPES, SIGNALS, COLORS
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -83,7 +84,12 @@ def effects():
 def narrative_plan(audio: UploadFile = File(...), intelligence_level: int = Form(3), user: Principal = Depends(require_user)):
     workspace = Path(tempfile.mkdtemp(prefix="beatsync_narrative_"))
     try:
-        audio_path = save_upload(audio, workspace, "audio")
+        try:
+        asset_paths=prepare_assets(asset_layers,assets,workspace)
+    except ValueError as exc:
+        shutil.rmtree(workspace,ignore_errors=True)
+        raise HTTPException(400,str(exc))
+    audio_path = save_upload(audio, workspace, "audio")
         return NarrativePlanner(
             str(audio_path),
             intelligence_level=max(3, intelligence_level),
@@ -105,6 +111,8 @@ def _render_job(
     overlay_config: OverlayConfig,
     blender_layers: list[SimulationLayer],
     motion_cues: list[MotionCue],
+    asset_layers: list[AssetLayer],
+    asset_paths: dict[str,str],
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -139,6 +147,8 @@ def _render_job(
             overlay_config=overlay_config,
             blender_layers=blender_layers,
             motion_cues=motion_cues,
+            asset_layers=asset_layers,
+            asset_paths=asset_paths,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -162,6 +172,8 @@ def create_render(
     overlays_json: str = Form("{}"),
     blender_layers_json: str = Form("[]"),
     motion_cues_json: str = Form("[]"),
+    asset_layers_json: str = Form("[]"),
+    assets: List[UploadFile] = File(default=[]),
     user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
@@ -219,6 +231,20 @@ def create_render(
     except (ValueError,TypeError,json.JSONDecodeError) as exc:
         raise HTTPException(400,f'Invalid motion_cues_json: {exc}')
 
+    try:
+        raw_assets=json.loads(asset_layers_json)
+        if not isinstance(raw_assets,list) or len(raw_assets)>8: raise ValueError('Maximum 8 animated 3D assets')
+        asset_fields=set(AssetLayer.__dataclass_fields__)
+        asset_layers=[]
+        for obj in raw_assets:
+            if not isinstance(obj,dict) or set(obj)-asset_fields: raise ValueError('Unknown asset field')
+            asset_layers.append(AssetLayer(**obj).validate())
+        if asset_layers and PLANS[effective_plan].intelligent_sync_level < 3:
+            raise ValueError('3D asset animation requires Creator or Studio')
+        if len(assets)>8: raise ValueError('Maximum 8 uploaded GLB assets')
+    except (ValueError,TypeError,json.JSONDecodeError) as exc:
+        raise HTTPException(400,f'Invalid asset_layers_json: {exc}')
+
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
     audio_path = save_upload(audio, workspace, "audio")
@@ -250,6 +276,8 @@ def create_render(
             overlay_config=overlay_config,
             blender_layers=blender_layers,
             motion_cues=motion_cues,
+            asset_layers=asset_layers,
+            asset_paths=asset_paths,
         ),
         daemon=True,
     )
@@ -299,3 +327,13 @@ def admin_delete_render(job_id: str, _: Principal = Depends(require_admin)):
 @app.get("/v1/blender/presets")
 def blender_presets():
     return [{"key":k,"family":v[0],"default_signal":v[1]} for k,v in PRESETS.items()]
+
+@app.get("/v1/assets/animation-options")
+def asset_animation_options():
+    return {
+        "sources": sorted(SHAPES | {"glb"}),
+        "animations": sorted(ANIMATIONS),
+        "signals": sorted(SIGNALS),
+        "colors": sorted(COLORS),
+        "upload_limit_bytes": 52428800,
+    }
