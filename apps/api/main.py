@@ -25,6 +25,7 @@ from beatstudio.character_animation import CharacterTrack, CameraTrack
 from beatstudio.character_providers import RodinClient
 from beatstudio.motion_import import save_motion_uploads
 from beatstudio.lyrics import LyricCue, parse_lyrics, STYLES, FONTS
+from beatstudio.agent_workflows import plan_prompt, AGENTS
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -469,3 +470,16 @@ def transcribe_lyrics(audio: UploadFile = File(...),
             raise HTTPException(503,str(exc)) from exc
     finally:
         shutil.rmtree(workspace,ignore_errors=True)
+
+@app.get("/v1/agents")
+def list_agents(user: Principal = Depends(require_user)):
+    return {"agents":list(AGENTS),"mode":"bounded-deterministic","execution":"review-before-render"}
+
+@app.post("/v1/agents/plan")
+def plan_agent_workflow(prompt: str = Form(...), duration: float = Form(30),
+                        intensity: float = Form(0.7),
+                        user: Principal = Depends(require_user)):
+    try:
+        return plan_prompt(prompt,duration=duration,intensity=intensity)
+    except (ValueError,TypeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
