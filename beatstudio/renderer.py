@@ -9,11 +9,12 @@ from .sound_fx import SoundFXEngine
 from .reactive_overlays import OverlayConfig, ReactiveOverlayEngine, composite
 from .blender_simulations import SimulationLayer, samples_from_sync
 from .blender_worker import render_blender_layers
+from .motion_cues import MotionCue, CueRenderer
 from pathlib import Path
 import shutil
 
 class VideoRenderer:
-    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None):
+    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None, motion_cues: list[MotionCue]|None=None):
         self.video_path=video_path; self.audio_path=audio_path; self.output_path=output_path
         self.plan=get_plan(plan_key); self.enabled=enabled or {}
         self.automatic_fx=automatic_fx; self.automatic_sound_fx=automatic_sound_fx
@@ -21,6 +22,7 @@ class VideoRenderer:
         self.prev_frame=None
         self.overlay_config=overlay_config
         self.blender_layers=blender_layers or []
+        self.motion_cues=motion_cues or []
 
     def validate_effects(self):
         allowed=[]
@@ -49,6 +51,7 @@ class VideoRenderer:
                 shutil.rmtree(blender_tmp,ignore_errors=True)
                 raise
         overlays=ReactiveOverlayEngine(self.overlay_config) if self.overlay_config else None
+        cue_renderer=CueRenderer(self.motion_cues) if self.motion_cues else None
         while True:
             ok,frame=cap.read()
             if not ok: break
@@ -67,6 +70,8 @@ class VideoRenderer:
             previous_section=state.section
             if overlays:
                 out=overlays.apply(out,state,idx)
+            if cue_renderer:
+                out=cue_renderer.apply(out,state)
             for path in blender_frames:
                 alpha=cv2.imread(str(Path(path)/f'frame_{idx+1:06d}.png'),cv2.IMREAD_UNCHANGED)
                 if alpha is not None:
