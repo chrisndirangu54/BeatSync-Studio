@@ -30,6 +30,9 @@ export default function Home() {
   const [assetLayers,setAssetLayers]=useState<AssetLayer[]>([]);
   const [assetFiles,setAssetFiles]=useState<File[]>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
+  const [rodinPrompt,setRodinPrompt]=useState("");
+  const [rodinJob,setRodinJob]=useState<any>(null);
+  const [rodinBusy,setRodinBusy]=useState(false);
   const [camera,setCamera]=useState({mode:"orbit",signal:"beat",speed:1,intensity:.5,distance:12,elevation:4,target_height:1.5});
   const [motionCues,setMotionCues]=useState<{text:string;start:number;duration:number;style:string;trigger:string;position:string}[]>([]);
 
@@ -40,6 +43,15 @@ export default function Home() {
     for(const effect of effects) (out[effect.category] ||= []).push(effect);
     return out;
   },[effects]);
+
+  async function requestRodin(){
+    if(!rodinPrompt.trim()||rodinBusy)return;
+    setRodinBusy(true);
+    try{const f=new FormData();f.append("prompt",rodinPrompt);f.append("t_pose","true");
+      setRodinJob(await postForm<any>("/v1/rodin/generate",f));
+    }catch(err){setRodinJob({error:err instanceof Error?err.message:String(err)});}
+    finally{setRodinBusy(false);}
+  }
 
   async function analyzeNarrative(){
     if(!audio)return; setBusy(true);
@@ -223,6 +235,14 @@ export default function Home() {
           <label className="field"><span>Camera music signal</span><select value={camera.signal} onChange={e=>setCamera(v=>({...v,signal:e.target.value}))}>{["beat","onset","bass","mids","treble","energy","drop"].map(m=><option key={m}>{m}</option>)}</select></label>
           {(["speed","intensity","distance","elevation","target_height"] as const).map(field=><label className="field" key={field}><span>{field}: {camera[field]}</span><input type="range" min={field==="speed"?0.1:field==="intensity"?0:field==="distance"?2:-10} max={field==="speed"?5:field==="intensity"?1:field==="distance"?40:20} step=".1" value={camera[field]} onChange={e=>setCamera(v=>({...v,[field]:Number(e.target.value)}))}/></label>)}
         </div>
+      </section>
+      <section className="panel">
+        <div className="panelTitle"><span>09</span><h2>Rodin AI Character / 3D Asset Generation</h2></div>
+        <p className="muted">Generate a rig-ready T-pose model using your configured Rodin API key. This is a paid external generation request, submitted only when you click Generate.</p>
+        <label className="field"><span>Character or 3D asset prompt</span><input value={rodinPrompt} maxLength={1024} onChange={e=>setRodinPrompt(e.target.value)} placeholder="Stylized cyberpunk dancer in a neutral T-pose, clean topology"/></label>
+        <button className="secondary" disabled={rodinBusy||!rodinPrompt.trim()} onClick={requestRodin}>{rodinBusy?"Generating…":"Generate with Rodin (provider credits may apply)"}</button>
+        {rodinJob&&<pre>{JSON.stringify(rodinJob,null,2)}</pre>}
+        <p className="muted">Once generation completes, obtain the GLB through the provider and upload it using the 3D asset panel above. Automatically importing generated files requires project-scoped storage integration.</p>
       </section>
       <section className="renderBar">
         <div><span className="eyebrow">FINAL OUTPUT</span><h2>Let Intelligent Beat Sync direct the cut.</h2></div>
