@@ -19,7 +19,7 @@ if preset not in {"ink_mixing","dual_smoke_mix","smoke_vortex","mushroom_cloud",
 fps=int(m["fps"]); signals=m.get("audio_samples",[])
 if not signals: raise SystemExit("Missing soundtrack control samples")
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete(use_global=False)
-scene=bpy.context.scene; scene.render.engine="BLENDER_EEVEE_NEXT"
+scene=bpy.context.scene; scene.render.engine="BLENDER_EEVEE_NEXT" if bpy.app.version >= (4,2,0) else "BLENDER_EEVEE"
 scene.render.resolution_x=int(m["width"]);scene.render.resolution_y=int(m["height"])
 scene.render.resolution_percentage=100
 scene.render.film_transparent=True;scene.render.fps=fps
