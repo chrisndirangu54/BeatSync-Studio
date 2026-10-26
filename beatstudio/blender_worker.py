@@ -87,13 +87,15 @@ def render_character_layers(characters, camera, asset_paths, samples, output_dir
     manifest=character_manifest(characters,camera,samples,fps,width,height)
     output=Path(output_dir).resolve();output.mkdir(parents=True,exist_ok=True)
     root=Path(next(iter(asset_paths.values()))).resolve().parent if asset_paths else None
-    if root is None: raise ValueError("Character GLB uploads missing")
+    if root is None: raise ValueError("Character asset uploads missing")
+    workspace=root.parent
     for layer in characters:
         for identifier in (layer.asset_id,layer.animation_id):
             if identifier:
                 p=Path(asset_paths[identifier]).resolve()
-                if root not in p.parents or not p.is_file(): raise ValueError("Unsafe asset path")
-    manifest["asset_root"]=str(root)
+                if workspace not in p.parents or not p.is_file(): raise ValueError("Unsafe asset path")
+    manifest["asset_root"]=str(workspace/"assets")
+    manifest["asset_paths"]={k:v for k,v in asset_paths.items() if k in {z for layer in characters for z in (layer.asset_id,layer.animation_id) if z}}
     path=output/"characters.json";path.write_text(json.dumps(manifest),encoding="utf8")
     if not shutil.which(blender_binary):raise RuntimeError("Blender executable unavailable")
     script=Path(__file__).resolve().parents[1]/"scripts"/"blender_character_worker.py"
