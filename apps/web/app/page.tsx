@@ -36,6 +36,7 @@ export default function Home() {
   const [lyrics,setLyrics]=useState<Array<{text:string;start:number;end:number;style:string;font:string;color:string;highlight:string;outline:string;position:string;signal:string;glow:boolean;bounce:boolean}>>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
   const [workflowPrompt,setWorkflowPrompt]=useState("");
+  const [workflowMode,setWorkflowMode]=useState("rules");
   const [workflowPlan,setWorkflowPlan]=useState<any>(null);
   const [workflowBusy,setWorkflowBusy]=useState(false);
   const [workflowError,setWorkflowError]=useState("");
@@ -56,7 +57,7 @@ export default function Home() {
   async function planWorkflow(){
     if(!workflowPrompt.trim()||workflowBusy)return;
     setWorkflowBusy(true);setWorkflowError("");
-    try{const form=new FormData();form.append("prompt",workflowPrompt);
+    try{const form=new FormData();form.append("prompt",workflowPrompt);form.append("mode",workflowMode);
       setWorkflowPlan(await postForm<any>("/v1/agents/plan",form));
     }catch(e){setWorkflowError(e instanceof Error?e.message:String(e));}
     finally{setWorkflowBusy(false);}
@@ -138,6 +139,7 @@ export default function Home() {
         <div className="panelTitle"><span>AI</span><h2>Prompt Director · Agent Workflows</h2></div>
         <p className="muted">Describe the music video, palette, rhythm and typography. Director, Rhythm, Visual FX, Typography and Quality agents propose a reviewable edit plan. Nothing is rendered or sent to external AI automatically.</p>
         <label className="field"><span>Creative brief</span><textarea rows={3} maxLength={2000} value={workflowPrompt} onChange={e=>setWorkflowPrompt(e.target.value)} placeholder="Cinematic neon cyan music video, bass-reactive spectrum bars, cursive lyrics, display 'Into the night'..."/></label>
+        <label className="field"><span>Planning engine</span><select value={workflowMode} onChange={e=>setWorkflowMode(e.target.value)}><option value="rules">Local workflow rules</option><option value="ai">AI creative director (Creator/Studio)</option></select></label>
         <button className="secondary" onClick={planWorkflow} disabled={workflowBusy||workflowPrompt.trim().length<3}>{workflowBusy?"Planning…":"Generate agent workflow"}</button>
         {workflowError&&<p role="alert">{workflowError}</p>}
         {workflowPlan&&<div>
