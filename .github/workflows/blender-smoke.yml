@@ -10,7 +10,10 @@ on:
 jobs:
   blender-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,10 +21,10 @@ jobs:
           python-version: '3.11'
       - name: Install Blender, FFmpeg and required libraries
         run: |
-          sudo apt-get update
-          sudo apt-get install -y blender ffmpeg libgl1
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends blender ffmpeg libgl1
           python -m pip install numpy opencv-python-headless
       - name: Blender version
         run: blender --version
       - name: Procedural, GLB and camera render smoke tests
-        run: python -m tests.blender_smoke
+        run: python tests/blender_smoke.py
