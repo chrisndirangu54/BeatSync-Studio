@@ -291,6 +291,22 @@ def create_render(
     audio_path = save_upload(audio, workspace, "audio")
     video_paths = [save_upload(video, workspace, f"video_{i}") for i, video in enumerate(videos)]
 
+    # Resolve uploaded GLB models and imported FBX/BVH/GLB motion assets before dispatch.
+    # Never pass undefined paths into the render worker.
+    try:
+        if len(motion_files) > 8:
+            raise ValueError("Maximum eight imported motion files")
+        asset_paths = prepare_assets(asset_layers, assets, workspace)
+        asset_paths.update(save_motion_uploads(motion_files, workspace))
+        required = {name for character in characters
+                    for name in (character.asset_id, character.animation_id) if name}
+        missing = required - asset_paths.keys()
+        if missing:
+            raise ValueError("Missing uploaded character assets: " + ", ".join(sorted(missing)))
+    except (ValueError, KeyError, TypeError) as exc:
+        shutil.rmtree(workspace, ignore_errors=True)
+        raise HTTPException(400, f"Invalid uploaded 3D or motion assets: {exc}") from exc
+
     JOBS[job_id] = {
         "id": job_id,
         "status": "queued",
