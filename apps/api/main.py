@@ -18,6 +18,7 @@ from beatstudio.narrative import NarrativePlanner
 from beatstudio.plans import PLANS
 from beatstudio.renderer import VideoRenderer
 from beatstudio.reactive_overlays import OverlayConfig
+from beatstudio.blender_simulations import SimulationLayer, PRESETS
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -101,6 +102,7 @@ def _render_job(
     automatic_fx: bool,
     automatic_sound_fx: bool,
     overlay_config: OverlayConfig,
+    blender_layers: list[SimulationLayer],
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -133,6 +135,7 @@ def _render_job(
             automatic_fx=automatic_fx,
             automatic_sound_fx=automatic_sound_fx,
             overlay_config=overlay_config,
+            blender_layers=blender_layers,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -154,6 +157,7 @@ def create_render(
     automatic_fx: bool = Form(True),
     automatic_sound_fx: bool = Form(False),
     overlays_json: str = Form("{}"),
+    blender_layers_json: str = Form("[]"),
     user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
@@ -184,6 +188,22 @@ def create_render(
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(400, f'Invalid overlays_json: {exc}')
 
+    try:
+        raw_layers=json.loads(blender_layers_json)
+        if not isinstance(raw_layers,list) or len(raw_layers)>4:
+            raise ValueError('Maximum four independent Blender layers per render')
+        allowed_layer_fields={'preset','enabled','signal','intensity','color_a','color_b','seed','quality'}
+        blender_layers=[]
+        for layer in raw_layers:
+            if not isinstance(layer,dict) or set(layer)-allowed_layer_fields:
+                raise ValueError('Invalid Blender layer')
+            item=SimulationLayer(**layer).validate()
+            if item.enabled: blender_layers.append(item)
+        if blender_layers and PLANS[effective_plan].intelligent_sync_level < 3:
+            raise ValueError('Blender simulations require Creator or Studio')
+    except (ValueError,TypeError,KeyError,json.JSONDecodeError) as exc:
+        raise HTTPException(400,f'Invalid blender_layers_json: {exc}')
+
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
     audio_path = save_upload(audio, workspace, "audio")
@@ -213,6 +233,7 @@ def create_render(
             automatic_fx=automatic_fx,
             automatic_sound_fx=automatic_sound_fx,
             overlay_config=overlay_config,
+            blender_layers=blender_layers,
         ),
         daemon=True,
     )
@@ -258,3 +279,7 @@ def admin_delete_render(job_id: str, _: Principal = Depends(require_admin)):
         except OSError:
             pass
     return {"id": job_id, "deleted": True}
+
+@app.get("/v1/blender/presets")
+def blender_presets():
+    return [{"key":k,"family":v[0],"default_signal":v[1]} for k,v in PRESETS.items()]
