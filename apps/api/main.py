@@ -26,6 +26,7 @@ from beatstudio.character_providers import RodinClient
 from beatstudio.motion_import import save_motion_uploads
 from beatstudio.lyrics import LyricCue, parse_lyrics, STYLES, FONTS
 from beatstudio.agent_workflows import plan_prompt, AGENTS
+from beatstudio.ai_director import plan_with_model
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -477,9 +478,16 @@ def list_agents(user: Principal = Depends(require_user)):
 
 @app.post("/v1/agents/plan")
 def plan_agent_workflow(prompt: str = Form(...), duration: float = Form(30),
-                        intensity: float = Form(0.7),
+                        intensity: float = Form(0.7), mode: str = Form("rules"),
                         user: Principal = Depends(require_user)):
     try:
+        if mode not in {"rules","ai"}:raise ValueError("Unknown planning mode")
+        if mode=="ai":
+            if not user.admin and user.plan not in {"creator","studio"}:
+                raise HTTPException(403,"AI Director requires Creator or Studio")
+            return plan_with_model(prompt,duration=duration,intensity=intensity)
         return plan_prompt(prompt,duration=duration,intensity=intensity)
     except (ValueError,TypeError) as exc:
         raise HTTPException(400,str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503,str(exc)) from exc
