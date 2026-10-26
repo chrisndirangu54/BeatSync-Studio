@@ -1,5 +1,6 @@
 """Blender headless character animation from validated, local manifest."""
 import bpy,json,math,sys
+from blender_retarget import retarget_action, bake_retarget
 from pathlib import Path
 from mathutils import Vector
 a=sys.argv[sys.argv.index("--")+1:]
@@ -31,10 +32,20 @@ for spec in m["characters"]:
         motion_arms=[o for o in set(bpy.data.objects)-before_motion if o.type=="ARMATURE"]
         if armatures and motion_arms:
             source=motion_arms[0];target=armatures[0]
-            # Copy actions only when bone names agree; cross-skeleton mapping requires a separate solver.
+            # Explicit name correspondence permits constrained rotation retargeting.
             if source.animation_data and source.animation_data.action and {b.name for b in source.data.bones}=={b.name for b in target.data.bones}:
                 target.animation_data_create()
                 target.animation_data.action=source.animation_data.action
+            elif source.animation_data and source.animation_data.action:
+                from collections import OrderedDict
+                def normalized(name):return name.lower().replace("mixamorig:","").replace("_","").replace(" ","")
+                target_names={normalized(b.name):b.name for b in target.data.bones}
+                mapping=OrderedDict((b.name,target_names[normalized(b.name)]) for b in source.data.bones if normalized(b.name) in target_names)
+                if len(mapping)>=4:
+                    retarget_action(source,target,mapping,preserve_root=spec.get("root_motion",False))
+                    bake_retarget(scene,target,1,len(m["audio_samples"]))
+                else:
+                    raise RuntimeError("Insufficient skeleton correspondence; external retargeting is required")
         for obj in set(bpy.data.objects)-before_motion: obj.hide_render=True
     tracks.append((parent,spec,armatures))
 bpy.ops.object.camera_add(location=(0,-12,5))
