@@ -22,6 +22,7 @@ from beatstudio.blender_simulations import SimulationLayer, PRESETS
 from beatstudio.motion_cues import MotionCue
 from beatstudio.asset_animation import AssetLayer, prepare_assets, ANIMATIONS, SHAPES, SIGNALS, COLORS
 from beatstudio.character_animation import CharacterTrack, CameraTrack
+from beatstudio.character_providers import RodinClient
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -363,3 +364,37 @@ def character_capabilities():
             "camera_modes":["static","orbit","dolly","truck","crane","handheld","zoom_pulse"],
             "mixamo":MixamoAdapter().capability(),
             "huggingface_models":list(HuggingFaceMotionAdapter.MODELS)}
+
+@app.post("/v1/rodin/generate")
+def rodin_generate(prompt: str = Form(...), t_pose: bool = Form(False),
+                   tier: str = Form("Regular"), user: Principal = Depends(require_user)):
+    """Explicit action: Rodin submissions consume paid provider credits."""
+    if not user.admin and user.plan not in {"creator","studio"}:
+        raise HTTPException(403,"Rodin generation requires Creator or Studio")
+    try:
+        return RodinClient().generate(prompt,t_pose=t_pose,tier=tier)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    except Exception as exc:
+        # Do not surface provider secret-bearing payloads to customers.
+        raise HTTPException(502,"Rodin generation request failed") from exc
+
+@app.get("/v1/rodin/status/{subscription_key}")
+def rodin_status(subscription_key: str,user: Principal=Depends(require_user)):
+    if not user.admin and user.plan not in {"creator","studio"}:
+        raise HTTPException(403,"Rodin access restricted")
+    if len(subscription_key)>256 or not subscription_key.replace("-","").replace("_","").isalnum():
+        raise HTTPException(400,"Invalid task key")
+    try: return RodinClient().status(subscription_key)
+    except Exception as exc: raise HTTPException(502,"Rodin status request failed") from exc
+
+@app.get("/v1/rodin/downloads/{task_uuid}")
+def rodin_download_links(task_uuid: str,user: Principal=Depends(require_user)):
+    if not user.admin and user.plan not in {"creator","studio"}:
+        raise HTTPException(403,"Rodin access restricted")
+    try:
+        import uuid as uuid_module
+        uuid_module.UUID(task_uuid)
+        return RodinClient().download_links(task_uuid)
+    except ValueError: raise HTTPException(400,"Invalid Rodin task identifier")
+    except Exception as exc: raise HTTPException(502,"Rodin download lookup failed") from exc
