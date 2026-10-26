@@ -6,14 +6,16 @@ from .effects import REGISTRY, TIER_RANK, apply_effect
 from .plans import get_plan
 from .auto_fx import AutoFXPolicy
 from .sound_fx import SoundFXEngine
+from .reactive_overlays import OverlayConfig, ReactiveOverlayEngine
 
 class VideoRenderer:
-    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False):
+    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None):
         self.video_path=video_path; self.audio_path=audio_path; self.output_path=output_path
         self.plan=get_plan(plan_key); self.enabled=enabled or {}
         self.automatic_fx=automatic_fx; self.automatic_sound_fx=automatic_sound_fx
         self.sync=IntelligentBeatSync(audio_path, self.plan.intelligent_sync_level)
         self.prev_frame=None
+        self.overlay_config=overlay_config
 
     def validate_effects(self):
         allowed=[]
@@ -31,6 +33,7 @@ class VideoRenderer:
         fd,temp=tempfile.mkstemp(suffix='.mp4'); os.close(fd)
         writer=cv2.VideoWriter(temp,cv2.VideoWriter_fourcc(*'mp4v'),fps,(ow,oh))
         effects=self.validate_effects(); idx=0; previous_section=None
+        overlays=ReactiveOverlayEngine(self.overlay_config) if self.overlay_config else None
         while True:
             ok,frame=cap.read()
             if not ok: break
@@ -47,11 +50,14 @@ class VideoRenderer:
             for key,intensity in effects + dynamic:
                 if key!='ghost_trail': out=apply_effect(out,key,intensity,state,idx)
             previous_section=state.section
+            if overlays:
+                out=overlays.apply(out,state,idx)
             if self.plan.watermark:
                 cv2.putText(out,'BeatSync Studio • Free',(16,oh-16),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
             self.prev_frame=out.copy(); writer.write(out); idx+=1
             if progress and idx%5==0: progress(min(1.0,idx/total))
         cap.release(); writer.release()
+        if overlays: overlays.close()
         mux_audio=self.audio_path
         temp_audio=None
         if self.automatic_sound_fx:
