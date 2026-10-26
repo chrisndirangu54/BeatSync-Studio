@@ -1,0 +1,27 @@
+name: Blender Rendering Smoke Tests
+on:
+  pull_request:
+    paths:
+      - 'beatstudio/**'
+      - 'scripts/**'
+      - 'tests/blender_smoke.py'
+      - '.github/workflows/blender-smoke.yml'
+  workflow_dispatch:
+jobs:
+  blender-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Blender, FFmpeg and required libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender ffmpeg libgl1
+          python -m pip install numpy opencv-python-headless
+      - name: Blender version
+        run: blender --version
+      - name: Procedural, GLB and camera render smoke tests
+        run: python -m tests.blender_smoke
