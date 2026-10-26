@@ -7,7 +7,7 @@ a=sys.argv[sys.argv.index("--")+1:]
 m=json.loads(Path(a[0]).read_text()); destination=Path(a[1]);destination.mkdir(parents=True,exist_ok=True)
 root=Path(m["asset_root"]).resolve()
 bpy.ops.object.select_all(action="SELECT");bpy.ops.object.delete(use_global=False)
-scene=bpy.context.scene;scene.render.engine="BLENDER_EEVEE_NEXT"
+scene=bpy.context.scene;scene.render.engine="BLENDER_EEVEE_NEXT" if bpy.app.version >= (4,2,0) else "BLENDER_EEVEE"
 scene.render.resolution_x=m["width"];scene.render.resolution_y=m["height"];scene.render.resolution_percentage=100
 scene.render.film_transparent=True;scene.render.fps=m["fps"]
 scene.render.image_settings.file_format="PNG";scene.render.image_settings.color_mode="RGBA"
