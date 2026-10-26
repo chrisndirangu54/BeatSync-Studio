@@ -8,6 +8,7 @@ type Effect = { key:string; name:string; category:string; description:string; ti
 type Plan = { key:string; name:string; monthly_usd:number; export_height:number; watermark:boolean; max_effects:number; intelligent_sync_level:number; features:string[]; };
 type NarrativeSection = { index:number; start:number; end:number; label:string; intent:string; preferred_tags:string[]; shot_scale:string; motion_style:string; emotional_tone:string; pacing:string; effect_direction:string[]; seedance_prompt:string; };
 type BlenderPreset = {key:string;family:string;default_signal:string};
+type AssetLayer = {name:string;source:string;asset_id:string;animation:string;signal:string;intensity:number;color:string;position_x:number;position_y:number;position_z:number;size:number;speed:number;enabled:boolean};
 type BlenderLayer = {preset:string;enabled:boolean;signal:string;intensity:number;color_a:string;color_b:string;seed:number;quality:string};
 type NarrativePlan = { duration:number; tempo:number; arc:string; sections:NarrativeSection[]; };
 
@@ -26,6 +27,8 @@ export default function Home() {
   const [outline,setOutline]=useState(false);
   const [outlineColor,setOutlineColor]=useState("magenta");
   const [caption,setCaption]=useState("");
+  const [assetLayers,setAssetLayers]=useState<AssetLayer[]>([]);
+  const [assetFiles,setAssetFiles]=useState<File[]>([]);
   const [motionCues,setMotionCues]=useState<{text:string;start:number;duration:number;style:string;trigger:string;position:string}[]>([]);
 
   useEffect(()=>{ getJSON<BlenderPreset[]>("/v1/blender/presets").then(setBlenderPresets).catch(console.error); Promise.all([getJSON<Effect[]>("/v1/effects"),getJSON<Plan[]>("/v1/plans")]).then(([fx,ps])=>{setEffects(fx);setPlans(ps);}); },[]);
@@ -54,6 +57,8 @@ export default function Home() {
       form.append("overlays_json",JSON.stringify({neural_outline:outline,outline_color:outlineColor,caption}));
       form.append("blender_layers_json",JSON.stringify(blenderLayers));
       form.append("motion_cues_json",JSON.stringify(motionCues));
+      form.append("asset_layers_json",JSON.stringify(assetLayers));
+      assetFiles.forEach(file=>form.append("assets",file));
       form.append("scene_aware","true");
       form.append("narrative_planning","true");
       form.append("automatic_fx","true");
@@ -177,6 +182,23 @@ export default function Home() {
           <label className="field"><span>Style</span><select value={cue.style} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,style:e.target.value}:x))}>{["explainer","reaction","lower_third","stat","title"].map(x=><option key={x}>{x}</option>)}</select></label>
           <label className="field"><span>Trigger</span><select value={cue.trigger} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,trigger:e.target.value}:x))}>{["beat","bass","mids","treble","onset","drop","energy"].map(x=><option key={x}>{x}</option>)}</select></label>
           <label className="field"><span>Placement</span><select value={cue.position} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,position:e.target.value}:x))}>{["top","middle","bottom"].map(x=><option key={x}>{x}</option>)}</select></label>
+        </div>)}</div>
+      </section>
+      <section className="panel">
+        <div className="panelTitle"><span>07</span><h2>Beat-Sync 3D Asset Animation Engine</h2></div>
+        <p className="muted">Animate Blender primitives or GLB models with independent music-driven transforms. For custom models upload GLB, then select the matching numbered asset ID.</p>
+        <label className="dropzone"><input type="file" accept=".glb,model/gltf-binary" multiple onChange={e=>setAssetFiles(Array.from(e.target.files||[]).slice(0,8))}/><b>{assetFiles.length?assetFiles.length+" 3D GLB file(s)":"Upload 3D models (.glb)"}</b></label>
+        <p className="muted">{assetFiles.map((f,i)=>"asset_"+i+" — "+f.name).join(" · ")}</p>
+        <button className="secondary" disabled={assetLayers.length>=8} onClick={()=>setAssetLayers(xs=>[...xs,{name:"Neon 3D Asset",source:"torus",asset_id:"",animation:"pulse",signal:"bass",intensity:.75,color:"cyan",position_x:0,position_y:0,position_z:0,size:1,speed:1,enabled:true}])}>Add 3D asset</button>
+        <div className="effectGrid">{assetLayers.map((asset,i)=><div className="effectCard active" key={i}>
+          <div className="effectTop"><strong>Asset {i+1}</strong><button className="toggle" onClick={()=>setAssetLayers(xs=>xs.filter((_,j)=>j!==i))}>Remove</button></div>
+          <label className="field"><span>Asset name</span><input maxLength={80} value={asset.name} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,name:e.target.value}:a))}/></label>
+          <label className="field"><span>Source</span><select value={asset.source} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,source:e.target.value}:a))}>{["cube","sphere","torus","cone","icosphere","text","glb"].map(k=><option key={k} value={k}>{k}</option>)}</select></label>
+          {asset.source==="glb"&&<label className="field"><span>Uploaded model</span><select value={asset.asset_id} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,asset_id:e.target.value}:a))}><option value="">Choose uploaded GLB</option>{assetFiles.map((file,j)=><option key={j} value={"asset_"+j}>{file.name}</option>)}</select></label>}
+          <label className="field"><span>Animation</span><select value={asset.animation} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,animation:e.target.value}:a))}>{["pulse","spin","bounce","orbit","wobble","scale","material_glow"].map(x=><option key={x}>{x}</option>)}</select></label>
+          <label className="field"><span>Signal</span><select value={asset.signal} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,signal:e.target.value}:a))}>{["beat","bass","mids","treble","onset","drop","energy"].map(x=><option key={x}>{x}</option>)}</select></label>
+          <label className="field"><span>Neon</span><select value={asset.color} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,color:e.target.value}:a))}>{["cyan","magenta","blue","lime"].map(x=><option key={x}>{x}</option>)}</select></label>
+          {(["intensity","size","speed","position_x","position_y","position_z"] as const).map(field=><label className="field" key={field}><span>{field}: {asset[field]}</span><input type="range" min={field==="intensity"?0:field==="size"||field==="speed"?.1:-10} max={field==="intensity"?1:field==="size"||field==="speed"?5:10} step=".1" value={asset[field]} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,[field]:Number(e.target.value)}:a))}/></label>)}
         </div>)}</div>
       </section>
       <section className="renderBar">
