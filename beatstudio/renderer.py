@@ -8,14 +8,15 @@ from .auto_fx import AutoFXPolicy
 from .sound_fx import SoundFXEngine
 from .reactive_overlays import OverlayConfig, ReactiveOverlayEngine, composite
 from .blender_simulations import SimulationLayer, samples_from_sync
-from .blender_worker import render_blender_layers, render_asset_layers
+from .blender_worker import render_blender_layers, render_asset_layers, render_character_layers
 from .asset_animation import AssetLayer
+from .character_animation import CharacterTrack, CameraTrack
 from .motion_cues import MotionCue, CueRenderer
 from pathlib import Path
 import shutil
 
 class VideoRenderer:
-    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None, motion_cues: list[MotionCue]|None=None, asset_layers: list[AssetLayer]|None=None, asset_paths: dict[str,str]|None=None):
+    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None, motion_cues: list[MotionCue]|None=None, asset_layers: list[AssetLayer]|None=None, asset_paths: dict[str,str]|None=None, characters: list[CharacterTrack]|None=None, camera: CameraTrack|None=None):
         self.video_path=video_path; self.audio_path=audio_path; self.output_path=output_path
         self.plan=get_plan(plan_key); self.enabled=enabled or {}
         self.automatic_fx=automatic_fx; self.automatic_sound_fx=automatic_sound_fx
@@ -26,6 +27,8 @@ class VideoRenderer:
         self.motion_cues=motion_cues or []
         self.asset_layers=asset_layers or []
         self.asset_paths=asset_paths or {}
+        self.characters=characters or []
+        self.camera=camera or CameraTrack()
 
     def validate_effects(self):
         allowed=[]
@@ -44,7 +47,7 @@ class VideoRenderer:
         writer=cv2.VideoWriter(temp,cv2.VideoWriter_fourcc(*'mp4v'),fps,(ow,oh))
         effects=self.validate_effects(); idx=0; previous_section=None
         blender_frames=[]; blender_tmp=None
-        if self.blender_layers or self.asset_layers:
+        if self.blender_layers or self.asset_layers or self.characters:
             blender_tmp=tempfile.mkdtemp(prefix='beatsync_blender_')
             try:
                 audio_samples=samples_from_sync(self.sync, max(12,min(60,int(round(fps)))),min(600,total/fps))
@@ -52,6 +55,10 @@ class VideoRenderer:
                     blender_frames=render_blender_layers(self.blender_layers,
                     audio_samples,
                     blender_tmp,fps=max(12,min(60,int(round(fps)))),width=1280,height=720)
+                if self.characters:
+                    blender_frames += render_character_layers(self.characters,self.camera,self.asset_paths,
+                        audio_samples,str(Path(blender_tmp)/'character_render'),
+                        fps=max(12,min(60,int(round(fps)))),width=1280,height=720)
                 if self.asset_layers:
                     blender_frames += render_asset_layers(self.asset_layers,self.asset_paths,
                         audio_samples,str(Path(blender_tmp)/'assets_render'),
