@@ -29,6 +29,7 @@ export default function Home() {
   const [caption,setCaption]=useState("");
   const [assetLayers,setAssetLayers]=useState<AssetLayer[]>([]);
   const [assetFiles,setAssetFiles]=useState<File[]>([]);
+  const [motionFiles,setMotionFiles]=useState<File[]>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
   const [rodinPrompt,setRodinPrompt]=useState("");
   const [rodinJob,setRodinJob]=useState<any>(null);
@@ -75,6 +76,7 @@ export default function Home() {
       form.append("characters_json",JSON.stringify(characters));
       form.append("camera_json",JSON.stringify(camera));
       assetFiles.forEach(file=>form.append("assets",file));
+      motionFiles.forEach(file=>form.append("motion_files",file));
       form.append("scene_aware","true");
       form.append("narrative_planning","true");
       form.append("automatic_fx","true");
@@ -205,6 +207,7 @@ export default function Home() {
         <p className="muted">Animate Blender primitives or GLB models with independent music-driven transforms. For custom models upload GLB, then select the matching numbered asset ID.</p>
         <label className="dropzone"><input type="file" accept=".glb,model/gltf-binary" multiple onChange={e=>setAssetFiles(Array.from(e.target.files||[]).slice(0,8))}/><b>{assetFiles.length?assetFiles.length+" 3D GLB file(s)":"Upload 3D models (.glb)"}</b></label>
         <p className="muted">{assetFiles.map((f,i)=>"asset_"+i+" — "+f.name).join(" · ")}</p>
+        <label className="dropzone"><input type="file" accept=".fbx,.bvh,.glb" multiple onChange={e=>setMotionFiles(Array.from(e.target.files||[]).slice(0,8))}/><b>{motionFiles.length?motionFiles.length+" motion file(s)":"Upload Mixamo FBX / BVH / GLB motions"}</b></label>
         <button className="secondary" disabled={assetLayers.length>=8} onClick={()=>setAssetLayers(xs=>[...xs,{name:"Neon 3D Asset",source:"torus",asset_id:"",animation:"pulse",signal:"bass",intensity:.75,color:"cyan",position_x:0,position_y:0,position_z:0,size:1,speed:1,enabled:true}])}>Add 3D asset</button>
         <div className="effectGrid">{assetLayers.map((asset,i)=><div className="effectCard active" key={i}>
           <div className="effectTop"><strong>Asset {i+1}</strong><button className="toggle" onClick={()=>setAssetLayers(xs=>xs.filter((_,j)=>j!==i))}>Remove</button></div>
@@ -226,7 +229,7 @@ export default function Home() {
           <label className="field"><span>Performer</span><input maxLength={80} value={c.name} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,name:e.target.value}:v))}/></label>
           {(["species","motion","signal"] as const).map(field=><label className="field" key={field}><span>{field}</span><select value={c[field]} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,[field]:e.target.value}:v))}>{(field==="species"?["human","quadruped","bird","other"]:field==="motion"?["dance","idle","walk","run","jump","spin","imported"]:["beat","onset","bass","mids","treble","energy","drop"]).map(value=><option key={value}>{value}</option>)}</select></label>)}
           <label className="field"><span>Character GLB</span><select value={c.asset_id} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,asset_id:e.target.value}:v))}><option value="">Choose model</option>{assetFiles.map((file,j)=><option value={"asset_"+j} key={j}>{file.name}</option>)}</select></label>
-          {c.motion==="imported"&&<label className="field"><span>Rigged animation GLB (matching skeleton)</span><select value={c.animation_id} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,animation_id:e.target.value}:v))}><option value="">Choose animation</option>{assetFiles.map((file,j)=><option value={"asset_"+j} key={j}>{file.name}</option>)}</select></label>}
+          {c.motion==="imported"&&<label className="field"><span>Rigged animation GLB (matching skeleton)</span><select value={c.animation_id} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,animation_id:e.target.value}:v))}><option value="">Choose animation</option>{motionFiles.map((file,j)=><option value={"motion_"+j} key={j}>{file.name}</option>)}</select></label>}
           {(["speed","intensity","scale"] as const).map(field=><label className="field" key={field}><span>{field}: {c[field]}</span><input type="range" min={field==="intensity"?0:0.1} max={field==="intensity"?1:field==="speed"?4:10} step=".05" value={c[field]} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,[field]:Number(e.target.value)}:v))}/></label>)}
         </div>)}</div>
         <h3>Music-controlled camera</h3>
