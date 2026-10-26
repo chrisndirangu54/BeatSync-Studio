@@ -7,6 +7,8 @@ import UserMenu from "@/components/UserMenu";
 type Effect = { key:string; name:string; category:string; description:string; tier:string; default_intensity:number; signal:string; };
 type Plan = { key:string; name:string; monthly_usd:number; export_height:number; watermark:boolean; max_effects:number; intelligent_sync_level:number; features:string[]; };
 type NarrativeSection = { index:number; start:number; end:number; label:string; intent:string; preferred_tags:string[]; shot_scale:string; motion_style:string; emotional_tone:string; pacing:string; effect_direction:string[]; seedance_prompt:string; };
+type BlenderPreset = {key:string;family:string;default_signal:string};
+type BlenderLayer = {preset:string;enabled:boolean;signal:string;intensity:number;color_a:string;color_b:string;seed:number;quality:string};
 type NarrativePlan = { duration:number; tempo:number; arc:string; sections:NarrativeSection[]; };
 
 export default function Home() {
@@ -19,8 +21,13 @@ export default function Home() {
   const [narrative,setNarrative]=useState<NarrativePlan|null>(null);
   const [job,setJob]=useState<any>(null);
   const [busy,setBusy]=useState(false);
+  const [blenderPresets,setBlenderPresets]=useState<BlenderPreset[]>([]);
+  const [blenderLayers,setBlenderLayers]=useState<BlenderLayer[]>([]);
+  const [outline,setOutline]=useState(false);
+  const [outlineColor,setOutlineColor]=useState("magenta");
+  const [caption,setCaption]=useState("");
 
-  useEffect(()=>{ Promise.all([getJSON<Effect[]>("/v1/effects"),getJSON<Plan[]>("/v1/plans")]).then(([fx,ps])=>{setEffects(fx);setPlans(ps);}); },[]);
+  useEffect(()=>{ getJSON<BlenderPreset[]>("/v1/blender/presets").then(setBlenderPresets).catch(console.error); Promise.all([getJSON<Effect[]>("/v1/effects"),getJSON<Plan[]>("/v1/plans")]).then(([fx,ps])=>{setEffects(fx);setPlans(ps);}); },[]);
 
   const grouped=useMemo(()=>{
     const out:Record<string,Effect[]>={};
@@ -43,6 +50,8 @@ export default function Home() {
       videos.forEach(v=>form.append("videos",v));
       form.append("plan_key",planKey);
       form.append("effects_json",JSON.stringify(selected));
+      form.append("overlays_json",JSON.stringify({neural_outline:outline,outline_color:outlineColor,caption}));
+      form.append("blender_layers_json",JSON.stringify(blenderLayers));
       form.append("scene_aware","true");
       form.append("narrative_planning","true");
       form.append("automatic_fx","true");
@@ -130,6 +139,28 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panelTitle"><span>04</span><h2>Blender Simulation Layers</h2></div>
+        <p className="muted">Independent neon visuals. Blender workers are required for export; physical fluid/smoke scenes require a Mantaflow bake. Creator/Studio plans only.</p>
+        <button className="secondary" disabled={blenderLayers.length>=4} onClick={()=>setBlenderLayers(old=>[...old,{preset:"neon_particles",enabled:true,signal:"treble",intensity:.8,color_a:"cyan",color_b:"magenta",seed:42,quality:"preview"}])}>Add Blender layer</button>
+        <div className="effectGrid">
+        {blenderLayers.map((layer,i)=><div className="effectCard active" key={i}>
+          <div className="effectTop"><b>Layer {i+1}</b><button className="toggle" onClick={()=>setBlenderLayers(ls=>ls.filter((_,j)=>j!==i))}>Remove</button></div>
+          <label className="field"><span>Simulation</span><select value={layer.preset} onChange={e=>setBlenderLayers(ls=>ls.map((x,j)=>j===i?{...x,preset:e.target.value,signal:blenderPresets.find(p=>p.key===e.target.value)?.default_signal||"beat"}:x))}>{blenderPresets.map(p=><option key={p.key} value={p.key}>{p.key.replaceAll("_"," ")} · {p.family}</option>)}</select></label>
+          <label className="field"><span>Driven by</span><select value={layer.signal} onChange={e=>setBlenderLayers(ls=>ls.map((x,j)=>j===i?{...x,signal:e.target.value}:x))}>{["beat","onset","bass","mids","treble","energy","drop"].map(t=><option key={t}>{t}</option>)}</select></label>
+          <label className="field"><span>Intensity {layer.intensity.toFixed(2)}</span><input type="range" min="0" max="1" step=".05" value={layer.intensity} onChange={e=>setBlenderLayers(ls=>ls.map((x,j)=>j===i?{...x,intensity:Number(e.target.value)}:x))}/></label>
+          {(["color_a","color_b"] as const).map(k=><label className="field" key={k}><span>{k==="color_a"?"Primary neon":"Secondary neon"}</span><select value={layer[k]} onChange={e=>setBlenderLayers(ls=>ls.map((x,j)=>j===i?{...x,[k]:e.target.value}:x))}>{["cyan","magenta","blue","lime"].map(c=><option key={c}>{c}</option>)}</select></label>)}
+          <label className="field"><span>Quality</span><select value={layer.quality} onChange={e=>setBlenderLayers(ls=>ls.map((x,j)=>j===i?{...x,quality:e.target.value}:x))}><option value="preview">Preview</option><option value="final">Final</option></select></label>
+        </div>)}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="panelTitle"><span>05</span><h2>Optional Neural Outline &amp; Typography</h2></div>
+        <label className="field"><span><input type="checkbox" checked={outline} onChange={e=>setOutline(e.target.checked)}/> Enable YOLO body outline</span></label>
+        <label className="field"><span>Neon color</span><select value={outlineColor} onChange={e=>setOutlineColor(e.target.value)}>{["magenta","cyan","blue","lime"].map(c=><option key={c}>{c}</option>)}</select></label>
+        <label className="field"><span>Animated caption</span><input maxLength={100} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Short video overlay text"/></label>
       </section>
 
       <section className="renderBar">
