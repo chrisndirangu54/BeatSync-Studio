@@ -31,6 +31,8 @@ export default function Home() {
   const [assetFiles,setAssetFiles]=useState<File[]>([]);
   const [motionFiles,setMotionFiles]=useState<File[]>([]);
   const [lyricsFile,setLyricsFile]=useState<File|null>(null);
+  const [transcribing,setTranscribing]=useState(false);
+  const [transcriptionError,setTranscriptionError]=useState("");
   const [lyrics,setLyrics]=useState<Array<{text:string;start:number;end:number;style:string;font:string;color:string;highlight:string;outline:string;position:string;signal:string;glow:boolean;bounce:boolean}>>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
   const [rodinPrompt,setRodinPrompt]=useState("");
@@ -46,6 +48,17 @@ export default function Home() {
     for(const effect of effects) (out[effect.category] ||= []).push(effect);
     return out;
   },[effects]);
+
+  async function transcribeTrack(){
+    if(!audio)return;
+    setTranscribing(true);setTranscriptionError("");
+    try{
+      const f=new FormData();f.append("audio",audio);
+      const result=await postForm<{cues:Array<{text:string;start:number;end:number;words:Array<[string,number,number]>}>}>("/v1/lyrics/transcribe",f);
+      setLyrics(result.cues.map(c=>({...c,style:"karaoke",font:"sans",color:"#FFFFFF",highlight:"#FF40FF",outline:"#101020",position:"bottom",signal:"beat",glow:true,bounce:true})));
+    }catch(e){setTranscriptionError(e instanceof Error?e.message:String(e));}
+    finally{setTranscribing(false);}
+  }
 
   async function requestRodin(){
     if(!rodinPrompt.trim()||rodinBusy)return;
@@ -255,6 +268,8 @@ export default function Home() {
         <div className="panelTitle"><span>10</span><h2>Beat-Synced Lyrics &amp; Calligraphy</h2></div>
         <p className="muted">Timed LRC/SRT subtitles or manual lyrics, per-line font style, neon colours, glow and beat-reactive karaoke.</p>
         <label className="dropzone"><input type="file" accept=".lrc,.srt" onChange={e=>setLyricsFile(e.target.files?.[0]||null)}/><b>{lyricsFile?.name||"Upload LRC or SRT lyrics"}</b></label>
+        <button className="secondary" disabled={!audio||transcribing} onClick={transcribeTrack}>{transcribing?"Transcribing…":"Auto-transcribe words (Creator/Studio)"}</button>
+        {transcriptionError&&<p role="alert">{transcriptionError}</p>}
         <button className="secondary" disabled={lyrics.length>=500} onClick={()=>setLyrics(ls=>[...ls,{text:"New lyric line",start:0,end:3,style:"karaoke",font:"sans",color:"#FFFFFF",highlight:"#FF40FF",outline:"#101020",position:"bottom",signal:"beat",glow:true,bounce:true}])}>Add timed lyric</button>
         <div className="effectGrid">{lyrics.map((cue,i)=><div className="effectCard active" key={i}>
           <button className="toggle" onClick={()=>setLyrics(ls=>ls.filter((_,j)=>j!==i))}>Remove</button>

@@ -438,3 +438,34 @@ def rodin_download_links(task_uuid: str,user: Principal=Depends(require_user)):
 @app.get("/v1/lyrics/styles")
 def lyric_styles():
     return {"styles":sorted(STYLES),"fonts":sorted(FONTS),"signals":["beat","onset","bass","mids","treble","energy","drop"]}
+
+@app.post("/v1/lyrics/transcribe")
+def transcribe_lyrics(audio: UploadFile = File(...),
+                      language: str | None = Form(None),
+                      user: Principal = Depends(require_user)):
+    """Explicit opt-in transcription. For production use a durable isolated worker."""
+    if not user.admin and user.plan not in {"creator","studio"}:
+        raise HTTPException(403,"Automatic transcription requires Creator or Studio")
+    if language and (len(language)>12 or not language.replace("-","").isalpha()):
+        raise HTTPException(400,"Invalid language code")
+    workspace=Path(tempfile.mkdtemp(prefix="beatsync_asr_"))
+    try:
+        suffix=Path(audio.filename or "").suffix.lower()
+        if suffix not in {".mp3",".wav",".m4a",".ogg",".flac"}:
+            raise HTTPException(400,"Unsupported audio file")
+        destination=workspace/("audio"+suffix)
+        with destination.open("wb") as fh:
+            copied=0
+            while True:
+                chunk=audio.file.read(1024*1024)
+                if not chunk:break
+                copied+=len(chunk)
+                if copied>30*1024*1024:raise HTTPException(413,"Audio exceeds 30 MB")
+                fh.write(chunk)
+        from beatstudio.lyrics_transcription import transcribe_local
+        try:
+            return transcribe_local(destination,language=language)
+        except RuntimeError as exc:
+            raise HTTPException(503,str(exc)) from exc
+    finally:
+        shutil.rmtree(workspace,ignore_errors=True)
