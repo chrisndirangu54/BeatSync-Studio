@@ -19,6 +19,7 @@ from beatstudio.plans import PLANS
 from beatstudio.renderer import VideoRenderer
 from beatstudio.reactive_overlays import OverlayConfig
 from beatstudio.blender_simulations import SimulationLayer, PRESETS
+from beatstudio.motion_cues import MotionCue
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -103,6 +104,7 @@ def _render_job(
     automatic_sound_fx: bool,
     overlay_config: OverlayConfig,
     blender_layers: list[SimulationLayer],
+    motion_cues: list[MotionCue],
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -136,6 +138,7 @@ def _render_job(
             automatic_sound_fx=automatic_sound_fx,
             overlay_config=overlay_config,
             blender_layers=blender_layers,
+            motion_cues=motion_cues,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -158,6 +161,7 @@ def create_render(
     automatic_sound_fx: bool = Form(False),
     overlays_json: str = Form("{}"),
     blender_layers_json: str = Form("[]"),
+    motion_cues_json: str = Form("[]"),
     user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
@@ -204,6 +208,17 @@ def create_render(
     except (ValueError,TypeError,KeyError,json.JSONDecodeError) as exc:
         raise HTTPException(400,f'Invalid blender_layers_json: {exc}')
 
+    try:
+        raw_cues=json.loads(motion_cues_json)
+        if not isinstance(raw_cues,list) or len(raw_cues)>50: raise ValueError('Maximum 50 cues')
+        allowed_cues={'text','start','duration','style','trigger','position'}
+        motion_cues=[]
+        for c in raw_cues:
+            if not isinstance(c,dict) or set(c)-allowed_cues: raise ValueError('Invalid cue object')
+            motion_cues.append(MotionCue(**c).validate())
+    except (ValueError,TypeError,json.JSONDecodeError) as exc:
+        raise HTTPException(400,f'Invalid motion_cues_json: {exc}')
+
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
     audio_path = save_upload(audio, workspace, "audio")
@@ -234,6 +249,7 @@ def create_render(
             automatic_sound_fx=automatic_sound_fx,
             overlay_config=overlay_config,
             blender_layers=blender_layers,
+            motion_cues=motion_cues,
         ),
         daemon=True,
     )
