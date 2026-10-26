@@ -23,12 +23,16 @@ class LyricCue:
     signal:str="beat"
     glow:bool=True
     bounce:bool=True
+    words:tuple=()
     def validate(self):
         if not isinstance(self.text,str) or not 1<=len(self.text)<=240:raise ValueError("Invalid lyric")
         if not 0<=self.start<self.end<=36000:raise ValueError("Invalid lyric time")
         if self.style not in STYLES or self.font not in FONTS or self.signal not in SIGNALS:raise ValueError("Invalid style/font/signal")
         if self.position not in {"top","middle","bottom"}:raise ValueError("Invalid lyric placement")
         if not all(COLOR.fullmatch(v) for v in (self.color,self.highlight,self.outline)):raise ValueError("Invalid hex colors")
+        for word in self.words:
+            if len(word)!=3 or not isinstance(word[0],str) or not self.start<=float(word[1])<float(word[2])<=self.end:
+                raise ValueError("Invalid word timestamps")
         return self
     def manifest(self):return asdict(self.validate())
 
