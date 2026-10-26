@@ -29,6 +29,8 @@ export default function Home() {
   const [caption,setCaption]=useState("");
   const [assetLayers,setAssetLayers]=useState<AssetLayer[]>([]);
   const [assetFiles,setAssetFiles]=useState<File[]>([]);
+  const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
+  const [camera,setCamera]=useState({mode:"orbit",signal:"beat",speed:1,intensity:.5,distance:12,elevation:4,target_height:1.5});
   const [motionCues,setMotionCues]=useState<{text:string;start:number;duration:number;style:string;trigger:string;position:string}[]>([]);
 
   useEffect(()=>{ getJSON<BlenderPreset[]>("/v1/blender/presets").then(setBlenderPresets).catch(console.error); Promise.all([getJSON<Effect[]>("/v1/effects"),getJSON<Plan[]>("/v1/plans")]).then(([fx,ps])=>{setEffects(fx);setPlans(ps);}); },[]);
@@ -58,6 +60,8 @@ export default function Home() {
       form.append("blender_layers_json",JSON.stringify(blenderLayers));
       form.append("motion_cues_json",JSON.stringify(motionCues));
       form.append("asset_layers_json",JSON.stringify(assetLayers));
+      form.append("characters_json",JSON.stringify(characters));
+      form.append("camera_json",JSON.stringify(camera));
       assetFiles.forEach(file=>form.append("assets",file));
       form.append("scene_aware","true");
       form.append("narrative_planning","true");
@@ -200,6 +204,25 @@ export default function Home() {
           <label className="field"><span>Neon</span><select value={asset.color} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,color:e.target.value}:a))}>{["cyan","magenta","blue","lime"].map(x=><option key={x}>{x}</option>)}</select></label>
           {(["intensity","size","speed","position_x","position_y","position_z"] as const).map(field=><label className="field" key={field}><span>{field}: {asset[field]}</span><input type="range" min={field==="intensity"?0:(field==="size"||field==="speed")?0.1:-10} max={field==="intensity"?1:field==="size"||field==="speed"?5:10} step=".1" value={asset[field]} onChange={e=>setAssetLayers(xs=>xs.map((a,j)=>i===j?{...a,[field]:Number(e.target.value)}:a))}/></label>)}
         </div>)}</div>
+      </section>
+      <section className="panel">
+        <div className="panelTitle"><span>08</span><h2>Characters, Animals &amp; Camera Choreography</h2></div>
+        <p className="muted">Upload rigged GLB characters or motion clips in the 3D asset upload panel. Mixamo downloads can be converted to GLB in Blender. Human and animal tracks are independent. Cross-species skeletal retargeting requires a compatible external model worker.</p>
+        <button className="secondary" disabled={characters.length>=8} onClick={()=>setCharacters(xs=>[...xs,{name:"Dancer",species:"human",asset_id:"",animation_id:"",motion:"dance",signal:"beat",speed:1,intensity:.75,scale:1}])}>Add dancer or animal</button>
+        <div className="effectGrid">{characters.map((c,i)=><div className="effectCard active" key={i}>
+          <button className="toggle" onClick={()=>setCharacters(xs=>xs.filter((_,j)=>j!==i))}>Remove</button>
+          <label className="field"><span>Performer</span><input maxLength={80} value={c.name} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,name:e.target.value}:v))}/></label>
+          {(["species","motion","signal"] as const).map(field=><label className="field" key={field}><span>{field}</span><select value={c[field]} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,[field]:e.target.value}:v))}>{(field==="species"?["human","quadruped","bird","other"]:field==="motion"?["dance","idle","walk","run","jump","spin","imported"]:["beat","onset","bass","mids","treble","energy","drop"]).map(value=><option key={value}>{value}</option>)}</select></label>)}
+          <label className="field"><span>Character GLB</span><select value={c.asset_id} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,asset_id:e.target.value}:v))}><option value="">Choose model</option>{assetFiles.map((file,j)=><option value={"asset_"+j} key={j}>{file.name}</option>)}</select></label>
+          {c.motion==="imported"&&<label className="field"><span>Rigged animation GLB (matching skeleton)</span><select value={c.animation_id} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,animation_id:e.target.value}:v))}><option value="">Choose animation</option>{assetFiles.map((file,j)=><option value={"asset_"+j} key={j}>{file.name}</option>)}</select></label>}
+          {(["speed","intensity","scale"] as const).map(field=><label className="field" key={field}><span>{field}: {c[field]}</span><input type="range" min={field==="intensity"?0:0.1} max={field==="intensity"?1:field==="speed"?4:10} step=".05" value={c[field]} onChange={e=>setCharacters(xs=>xs.map((v,j)=>j===i?{...v,[field]:Number(e.target.value)}:v))}/></label>)}
+        </div>)}</div>
+        <h3>Music-controlled camera</h3>
+        <div className="effectGrid">
+          <label className="field"><span>Camera move</span><select value={camera.mode} onChange={e=>setCamera(v=>({...v,mode:e.target.value}))}>{["static","orbit","dolly","truck","crane","handheld","zoom_pulse"].map(m=><option key={m}>{m}</option>)}</select></label>
+          <label className="field"><span>Camera music signal</span><select value={camera.signal} onChange={e=>setCamera(v=>({...v,signal:e.target.value}))}>{["beat","onset","bass","mids","treble","energy","drop"].map(m=><option key={m}>{m}</option>)}</select></label>
+          {(["speed","intensity","distance","elevation","target_height"] as const).map(field=><label className="field" key={field}><span>{field}: {camera[field]}</span><input type="range" min={field==="speed"?0.1:field==="intensity"?0:field==="distance"?2:-10} max={field==="speed"?5:field==="intensity"?1:field==="distance"?40:20} step=".1" value={camera[field]} onChange={e=>setCamera(v=>({...v,[field]:Number(e.target.value)}))}/></label>)}
+        </div>
       </section>
       <section className="renderBar">
         <div><span className="eyebrow">FINAL OUTPUT</span><h2>Let Intelligent Beat Sync direct the cut.</h2></div>
