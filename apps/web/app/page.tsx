@@ -30,6 +30,8 @@ export default function Home() {
   const [assetLayers,setAssetLayers]=useState<AssetLayer[]>([]);
   const [assetFiles,setAssetFiles]=useState<File[]>([]);
   const [motionFiles,setMotionFiles]=useState<File[]>([]);
+  const [lyricsFile,setLyricsFile]=useState<File|null>(null);
+  const [lyrics,setLyrics]=useState<Array<{text:string;start:number;end:number;style:string;font:string;color:string;highlight:string;outline:string;position:string;signal:string;glow:boolean;bounce:boolean}>>([]);
   const [characters,setCharacters]=useState<Array<{name:string;species:string;asset_id:string;animation_id:string;motion:string;signal:string;speed:number;intensity:number;scale:number}>>([]);
   const [rodinPrompt,setRodinPrompt]=useState("");
   const [rodinJob,setRodinJob]=useState<any>(null);
@@ -75,6 +77,8 @@ export default function Home() {
       form.append("asset_layers_json",JSON.stringify(assetLayers));
       form.append("characters_json",JSON.stringify(characters));
       form.append("camera_json",JSON.stringify(camera));
+      form.append("lyrics_json",JSON.stringify(lyrics));
+      if(lyricsFile)form.append("lyrics_file",lyricsFile);
       assetFiles.forEach(file=>form.append("assets",file));
       motionFiles.forEach(file=>form.append("motion_files",file));
       form.append("scene_aware","true");
@@ -246,6 +250,20 @@ export default function Home() {
         <button className="secondary" disabled={rodinBusy||!rodinPrompt.trim()} onClick={requestRodin}>{rodinBusy?"Generating…":"Generate with Rodin (provider credits may apply)"}</button>
         {rodinJob&&<pre>{JSON.stringify(rodinJob,null,2)}</pre>}
         <p className="muted">Once generation completes, obtain the GLB through the provider and upload it using the 3D asset panel above. Automatically importing generated files requires project-scoped storage integration.</p>
+      </section>
+      <section className="panel">
+        <div className="panelTitle"><span>10</span><h2>Beat-Synced Lyrics &amp; Calligraphy</h2></div>
+        <p className="muted">Timed LRC/SRT subtitles or manual lyrics, per-line font style, neon colours, glow and beat-reactive karaoke.</p>
+        <label className="dropzone"><input type="file" accept=".lrc,.srt" onChange={e=>setLyricsFile(e.target.files?.[0]||null)}/><b>{lyricsFile?.name||"Upload LRC or SRT lyrics"}</b></label>
+        <button className="secondary" disabled={lyrics.length>=500} onClick={()=>setLyrics(ls=>[...ls,{text:"New lyric line",start:0,end:3,style:"karaoke",font:"sans",color:"#FFFFFF",highlight:"#FF40FF",outline:"#101020",position:"bottom",signal:"beat",glow:true,bounce:true}])}>Add timed lyric</button>
+        <div className="effectGrid">{lyrics.map((cue,i)=><div className="effectCard active" key={i}>
+          <button className="toggle" onClick={()=>setLyrics(ls=>ls.filter((_,j)=>j!==i))}>Remove</button>
+          <label className="field"><span>Lyrics</span><input maxLength={240} value={cue.text} onChange={e=>setLyrics(ls=>ls.map((c,j)=>j===i?{...c,text:e.target.value}:c))}/></label>
+          {(["start","end"] as const).map(k=><label className="field" key={k}><span>{k} (seconds)</span><input type="number" min="0" max="36000" step=".1" value={cue[k]} onChange={e=>setLyrics(ls=>ls.map((c,j)=>j===i?{...c,[k]:Number(e.target.value)}:c))}/></label>)}
+          {(["style","font","position","signal"] as const).map(k=><label className="field" key={k}><span>{k}</span><select value={cue[k]} onChange={e=>setLyrics(ls=>ls.map((c,j)=>j===i?{...c,[k]:e.target.value}:c))}>{(k==="style"?["karaoke","calligraphy","brush","neon_script","serif","bold_pop","gothic","minimal"]:k==="font"?["sans","serif","script","handwriting","display","mono"]:k==="position"?["top","middle","bottom"]:["beat","onset","bass","mids","treble","energy","drop"]).map(v=><option key={v}>{v}</option>)}</select></label>)}
+          {(["color","highlight","outline"] as const).map(k=><label className="field" key={k}><span>{k}</span><input type="color" value={cue[k]} onChange={e=>setLyrics(ls=>ls.map((c,j)=>j===i?{...c,[k]:e.target.value}:c))}/></label>)}
+          {(["glow","bounce"] as const).map(k=><label className="field" key={k}><span><input type="checkbox" checked={cue[k]} onChange={e=>setLyrics(ls=>ls.map((c,j)=>j===i?{...c,[k]:e.target.checked}:c))}/> {k}</span></label>)}
+        </div>)}</div>
       </section>
       <section className="renderBar">
         <div><span className="eyebrow">FINAL OUTPUT</span><h2>Let Intelligent Beat Sync direct the cut.</h2></div>

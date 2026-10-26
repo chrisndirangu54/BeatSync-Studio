@@ -12,11 +12,13 @@ from .blender_worker import render_blender_layers, render_asset_layers, render_c
 from .asset_animation import AssetLayer
 from .character_animation import CharacterTrack, CameraTrack
 from .motion_cues import MotionCue, CueRenderer
+from .lyrics import LyricCue
+from .lyric_renderer import LyricRenderer
 from pathlib import Path
 import shutil
 
 class VideoRenderer:
-    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None, motion_cues: list[MotionCue]|None=None, asset_layers: list[AssetLayer]|None=None, asset_paths: dict[str,str]|None=None, characters: list[CharacterTrack]|None=None, camera: CameraTrack|None=None):
+    def __init__(self, video_path, audio_path, output_path, plan_key='free', enabled: Dict[str,float]|None=None, automatic_fx: bool=False, automatic_sound_fx: bool=False, overlay_config: OverlayConfig|None=None, blender_layers: list[SimulationLayer]|None=None, motion_cues: list[MotionCue]|None=None, asset_layers: list[AssetLayer]|None=None, asset_paths: dict[str,str]|None=None, characters: list[CharacterTrack]|None=None, camera: CameraTrack|None=None, lyric_cues: list[LyricCue]|None=None):
         self.video_path=video_path; self.audio_path=audio_path; self.output_path=output_path
         self.plan=get_plan(plan_key); self.enabled=enabled or {}
         self.automatic_fx=automatic_fx; self.automatic_sound_fx=automatic_sound_fx
@@ -29,6 +31,7 @@ class VideoRenderer:
         self.asset_paths=asset_paths or {}
         self.characters=characters or []
         self.camera=camera or CameraTrack()
+        self.lyric_cues=lyric_cues or []
 
     def validate_effects(self):
         allowed=[]
@@ -68,6 +71,7 @@ class VideoRenderer:
                 raise
         overlays=ReactiveOverlayEngine(self.overlay_config) if self.overlay_config else None
         cue_renderer=CueRenderer(self.motion_cues) if self.motion_cues else None
+        lyric_renderer=LyricRenderer(self.lyric_cues) if self.lyric_cues else None
         while True:
             ok,frame=cap.read()
             if not ok: break
@@ -98,6 +102,8 @@ class VideoRenderer:
                         out=(out.astype('float32')*(1-coverage)+alpha[:,:,:3].astype('float32')*coverage).clip(0,255).astype('uint8')
                     else:
                         out=cv2.addWeighted(out,.5,cv2.resize(alpha,(ow,oh)),.5,0)
+            if lyric_renderer:
+                out=lyric_renderer.apply(out,state)
             if self.plan.watermark:
                 cv2.putText(out,'BeatSync Studio • Free',(16,oh-16),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
             self.prev_frame=out.copy(); writer.write(out); idx+=1

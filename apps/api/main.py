@@ -24,6 +24,7 @@ from beatstudio.asset_animation import AssetLayer, prepare_assets, ANIMATIONS, S
 from beatstudio.character_animation import CharacterTrack, CameraTrack
 from beatstudio.character_providers import RodinClient
 from beatstudio.motion_import import save_motion_uploads
+from beatstudio.lyrics import LyricCue, parse_lyrics, STYLES, FONTS
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -113,6 +114,7 @@ def _render_job(
     asset_paths: dict[str,str],
     characters: list[CharacterTrack],
     camera: CameraTrack,
+    lyric_cues: list[LyricCue],
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -151,6 +153,7 @@ def _render_job(
             asset_paths=asset_paths,
             characters=characters,
             camera=camera,
+            lyric_cues=lyric_cues,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -177,6 +180,8 @@ def create_render(
     asset_layers_json: str = Form("[]"),
     characters_json: str = Form("[]"),
     camera_json: str = Form("{}"),
+    lyrics_json: str = Form("[]"),
+    lyrics_file: UploadFile | None = File(default=None),
     assets: List[UploadFile] = File(default=[]),
     motion_files: List[UploadFile] = File(default=[]),
     user: Principal = Depends(require_user),
@@ -263,6 +268,22 @@ def create_render(
         if characters and PLANS[effective_plan].intelligent_sync_level<3: raise ValueError('Character animation requires Creator or Studio')
     except (ValueError,TypeError,json.JSONDecodeError) as exc:
         raise HTTPException(400,f'Invalid character animation: {exc}')
+    try:
+        raw_lyrics=json.loads(lyrics_json)
+        if not isinstance(raw_lyrics,list) or len(raw_lyrics)>500: raise ValueError('Maximum 500 lyric cues')
+        lyric_cues=[]
+        for item in raw_lyrics:
+            if not isinstance(item,dict) or set(item)-set(LyricCue.__dataclass_fields__): raise ValueError('Invalid lyric fields')
+            lyric_cues.append(LyricCue(**item).validate())
+        if lyrics_file and lyrics_file.filename:
+            extension=Path(lyrics_file.filename).suffix.lower()
+            data=lyrics_file.file.read(256*1024+1)
+            if len(data)>256*1024: raise ValueError('Lyric file too large')
+            lyric_cues.extend(parse_lyrics(data.decode('utf8-sig'),extension))
+        if len(lyric_cues)>500: raise ValueError('Maximum 500 lyric cues')
+    except (ValueError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
+        raise HTTPException(400,f'Invalid lyric input: {exc}')
+
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
     audio_path = save_upload(audio, workspace, "audio")
@@ -298,6 +319,7 @@ def create_render(
             asset_paths=asset_paths,
             characters=characters,
             camera=camera,
+            lyric_cues=lyric_cues,
         ),
         daemon=True,
     )
@@ -412,3 +434,7 @@ def rodin_download_links(task_uuid: str,user: Principal=Depends(require_user)):
     except HTTPException: raise
     except ValueError: raise HTTPException(400,"Invalid Rodin task identifier")
     except Exception as exc: raise HTTPException(502,"Rodin download lookup failed") from exc
+
+@app.get("/v1/lyrics/styles")
+def lyric_styles():
+    return {"styles":sorted(STYLES),"fonts":sorted(FONTS),"signals":["beat","onset","bass","mids","treble","energy","drop"]}
