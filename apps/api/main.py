@@ -21,6 +21,7 @@ from beatstudio.reactive_overlays import OverlayConfig
 from beatstudio.blender_simulations import SimulationLayer, PRESETS
 from beatstudio.motion_cues import MotionCue
 from beatstudio.asset_animation import AssetLayer, prepare_assets, ANIMATIONS, SHAPES, SIGNALS, COLORS
+from beatstudio.character_animation import CharacterTrack, CameraTrack
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -108,6 +109,8 @@ def _render_job(
     motion_cues: list[MotionCue],
     asset_layers: list[AssetLayer],
     asset_paths: dict[str,str],
+    characters: list[CharacterTrack],
+    camera: CameraTrack,
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -144,6 +147,8 @@ def _render_job(
             motion_cues=motion_cues,
             asset_layers=asset_layers,
             asset_paths=asset_paths,
+            characters=characters,
+            camera=camera,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -168,6 +173,8 @@ def create_render(
     blender_layers_json: str = Form("[]"),
     motion_cues_json: str = Form("[]"),
     asset_layers_json: str = Form("[]"),
+    characters_json: str = Form("[]"),
+    camera_json: str = Form("{}"),
     assets: List[UploadFile] = File(default=[]),
     user: Principal = Depends(require_user),
 ):
@@ -240,6 +247,19 @@ def create_render(
     except (ValueError,TypeError,json.JSONDecodeError) as exc:
         raise HTTPException(400,f'Invalid asset_layers_json: {exc}')
 
+    try:
+        raw_characters=json.loads(characters_json)
+        if not isinstance(raw_characters,list) or len(raw_characters)>8: raise ValueError('Maximum eight characters')
+        characters=[]
+        for item in raw_characters:
+            if not isinstance(item,dict) or set(item)-set(CharacterTrack.__dataclass_fields__): raise ValueError('Invalid character data')
+            characters.append(CharacterTrack(**item).validate())
+        raw_camera=json.loads(camera_json)
+        if not isinstance(raw_camera,dict) or set(raw_camera)-set(CameraTrack.__dataclass_fields__): raise ValueError('Invalid camera')
+        camera=CameraTrack(**raw_camera).validate()
+        if characters and PLANS[effective_plan].intelligent_sync_level<3: raise ValueError('Character animation requires Creator or Studio')
+    except (ValueError,TypeError,json.JSONDecodeError) as exc:
+        raise HTTPException(400,f'Invalid character animation: {exc}')
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
     audio_path = save_upload(audio, workspace, "audio")
@@ -273,6 +293,8 @@ def create_render(
             motion_cues=motion_cues,
             asset_layers=asset_layers,
             asset_paths=asset_paths,
+            characters=characters,
+            camera=camera,
         ),
         daemon=True,
     )
@@ -332,3 +354,12 @@ def asset_animation_options():
         "colors": sorted(COLORS),
         "upload_limit_bytes": 52428800,
     }
+
+@app.get("/v1/characters/capabilities")
+def character_capabilities():
+    from beatstudio.character_providers import MixamoAdapter, HuggingFaceMotionAdapter
+    return {"species":["human","quadruped","bird","other"],
+            "motions":["idle","dance","walk","run","jump","spin","imported"],
+            "camera_modes":["static","orbit","dolly","truck","crane","handheld","zoom_pulse"],
+            "mixamo":MixamoAdapter().capability(),
+            "huggingface_models":list(HuggingFaceMotionAdapter.MODELS)}
