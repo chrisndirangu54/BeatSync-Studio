@@ -17,6 +17,7 @@ from beatstudio.effects import SPECS
 from beatstudio.narrative import NarrativePlanner
 from beatstudio.plans import PLANS
 from beatstudio.renderer import VideoRenderer
+from beatstudio.reactive_overlays import OverlayConfig
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -99,6 +100,7 @@ def _render_job(
     narrative_planning: bool,
     automatic_fx: bool,
     automatic_sound_fx: bool,
+    overlay_config: OverlayConfig,
 ):
     JOBS[job_id].update(status="running", progress=0.02)
     try:
@@ -130,6 +132,7 @@ def _render_job(
             effects,
             automatic_fx=automatic_fx,
             automatic_sound_fx=automatic_sound_fx,
+            overlay_config=overlay_config,
         )
         renderer.render(
             lambda value: JOBS[job_id].update(progress=round(0.40 + value * 0.60, 4))
@@ -150,6 +153,7 @@ def create_render(
     narrative_planning: bool = Form(True),
     automatic_fx: bool = Form(True),
     automatic_sound_fx: bool = Form(False),
+    overlays_json: str = Form("{}"),
     user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
@@ -164,6 +168,21 @@ def create_render(
         effects = {str(k): float(v) for k, v in json.loads(effects_json).items()}
     except Exception as exc:
         raise HTTPException(400, f"Invalid effects_json: {exc}")
+
+    try:
+        overlay_input = json.loads(overlays_json)
+        if not isinstance(overlay_input, dict):
+            raise ValueError('Expected an object')
+        allowed = {'neural_outline','outline_color','outline_intensity','caption','trigger'}
+        if set(overlay_input) - allowed:
+            raise ValueError('Unsupported overlay field')
+        overlay_config = OverlayConfig(**overlay_input)
+        if overlay_config.outline_color not in {'cyan','magenta','blue','lime'} or overlay_config.trigger not in {'beat','onset','bass','mids','treble','drop','energy'} or len(overlay_config.caption) > 100:
+            raise ValueError('Invalid overlay configuration')
+        if overlay_config.neural_outline and PLANS[effective_plan].intelligent_sync_level < 2:
+            raise ValueError('Neural outline requires Pro or higher')
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f'Invalid overlays_json: {exc}')
 
     job_id = uuid.uuid4().hex
     workspace = Path(tempfile.mkdtemp(prefix=f"beatsync_{job_id}_"))
@@ -193,6 +212,7 @@ def create_render(
             narrative_planning=narrative_planning,
             automatic_fx=automatic_fx,
             automatic_sound_fx=automatic_sound_fx,
+            overlay_config=overlay_config,
         ),
         daemon=True,
     )
