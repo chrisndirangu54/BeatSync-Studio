@@ -23,6 +23,7 @@ from beatstudio.motion_cues import MotionCue
 from beatstudio.asset_animation import AssetLayer, prepare_assets, ANIMATIONS, SHAPES, SIGNALS, COLORS
 from beatstudio.character_animation import CharacterTrack, CameraTrack
 from beatstudio.character_providers import RodinClient
+from beatstudio.motion_import import save_motion_uploads
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
 
@@ -177,6 +178,7 @@ def create_render(
     characters_json: str = Form("[]"),
     camera_json: str = Form("{}"),
     assets: List[UploadFile] = File(default=[]),
+    motion_files: List[UploadFile] = File(default=[]),
     user: Principal = Depends(require_user),
 ):
     if plan_key not in PLANS:
