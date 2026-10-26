@@ -26,6 +26,7 @@ export default function Home() {
   const [outline,setOutline]=useState(false);
   const [outlineColor,setOutlineColor]=useState("magenta");
   const [caption,setCaption]=useState("");
+  const [motionCues,setMotionCues]=useState<{text:string;start:number;duration:number;style:string;trigger:string;position:string}[]>([]);
 
   useEffect(()=>{ getJSON<BlenderPreset[]>("/v1/blender/presets").then(setBlenderPresets).catch(console.error); Promise.all([getJSON<Effect[]>("/v1/effects"),getJSON<Plan[]>("/v1/plans")]).then(([fx,ps])=>{setEffects(fx);setPlans(ps);}); },[]);
 
@@ -52,6 +53,7 @@ export default function Home() {
       form.append("effects_json",JSON.stringify(selected));
       form.append("overlays_json",JSON.stringify({neural_outline:outline,outline_color:outlineColor,caption}));
       form.append("blender_layers_json",JSON.stringify(blenderLayers));
+      form.append("motion_cues_json",JSON.stringify(motionCues));
       form.append("scene_aware","true");
       form.append("narrative_planning","true");
       form.append("automatic_fx","true");
@@ -163,6 +165,20 @@ export default function Home() {
         <label className="field"><span>Animated caption</span><input maxLength={100} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Short video overlay text"/></label>
       </section>
 
+      <section className="panel">
+        <div className="panelTitle"><span>06</span><h2>Explainer Graphics, Reaction Memes &amp; Titles</h2></div>
+        <p className="muted">Independent, time-coded graphic and reaction text cues. Media uploads and automated AI script generation require an additional service.</p>
+        <button className="secondary" onClick={()=>setMotionCues(xs=>xs.length>=50?xs:[...xs,{text:"",start:0,duration:2,style:"explainer",trigger:"beat",position:"bottom"}])}>Add motion cue</button>
+        <div className="effectGrid">{motionCues.map((cue,i)=><div className="effectCard active" key={i}>
+          <button className="toggle" onClick={()=>setMotionCues(cs=>cs.filter((_,j)=>i!==j))}>Remove cue</button>
+          <label className="field"><span>Text</span><input maxLength={140} value={cue.text} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,text:e.target.value}:x))}/></label>
+          <label className="field"><span>Start (seconds)</span><input type="number" min="0" max="600" step=".1" value={cue.start} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,start:Number(e.target.value)}:x))}/></label>
+          <label className="field"><span>Duration (seconds)</span><input type="number" min=".2" max="30" step=".1" value={cue.duration} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,duration:Number(e.target.value)}:x))}/></label>
+          <label className="field"><span>Style</span><select value={cue.style} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,style:e.target.value}:x))}>{["explainer","reaction","lower_third","stat","title"].map(x=><option key={x}>{x}</option>)}</select></label>
+          <label className="field"><span>Trigger</span><select value={cue.trigger} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,trigger:e.target.value}:x))}>{["beat","bass","mids","treble","onset","drop","energy"].map(x=><option key={x}>{x}</option>)}</select></label>
+          <label className="field"><span>Placement</span><select value={cue.position} onChange={e=>setMotionCues(cs=>cs.map((x,j)=>j===i?{...x,position:e.target.value}:x))}>{["top","middle","bottom"].map(x=><option key={x}>{x}</option>)}</select></label>
+        </div>)}</div>
+      </section>
       <section className="renderBar">
         <div><span className="eyebrow">FINAL OUTPUT</span><h2>Let Intelligent Beat Sync direct the cut.</h2></div>
         <button className="primary" disabled={!audio||videos.length===0||busy} onClick={submitRender}>{busy?"Submitting…":"Create render job"}</button>
