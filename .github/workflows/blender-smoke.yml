@@ -22,8 +22,10 @@ jobs:
       - name: Install Blender, FFmpeg and required libraries
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends blender ffmpeg libgl1
+          sudo apt-get install -y --no-install-recommends blender ffmpeg libgl1 libegl1 libgl1-mesa-dri libopengl0 libxrender1 libx11-6
           python -m pip install numpy opencv-python-headless
+      - name: Verify EGL runtime
+        run: ldconfig -p | grep 'libEGL.so.1'
       - name: Blender version
         run: blender --version
       - name: Procedural, GLB and camera render smoke tests
