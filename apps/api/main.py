@@ -29,6 +29,7 @@ from beatstudio.agent_workflows import plan_prompt, AGENTS
 from beatstudio.ai_director import plan_with_model
 from .auth import Principal, require_admin, require_user
 from .admin import router as admin_router
+from .media_cloud_bridge import router as media_cloud_router
 
 app = FastAPI(
     title="BeatSync Studio API",
@@ -49,6 +50,7 @@ JOBS: dict[str, dict] = {}
 OUTPUT_DIR = Path(os.getenv("BEATSYNC_OUTPUT_DIR", "/tmp/beatsync-outputs"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app.include_router(admin_router)
+app.include_router(media_cloud_router)
 
 def save_upload(upload: UploadFile, directory: Path, prefix: str) -> Path:
     suffix = Path(upload.filename or "").suffix
